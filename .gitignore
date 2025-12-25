@@ -1,0 +1,64 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+.eggs/
+*.egg-info/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+
+# Logs
+*.log
+logs/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.cache/
+
+# Backend
+backend/__pycache__/
+backend/*.pyc
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+.temp/
+.tmp/
+
+pokeapi/
