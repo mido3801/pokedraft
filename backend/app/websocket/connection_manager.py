@@ -46,8 +46,12 @@ class ConnectionManager:
         if draft_id not in self.connections:
             return
 
+        # Copy the set to avoid modification during iteration
+        async with self._lock:
+            connections = set(self.connections.get(draft_id, set()))
+
         dead_connections = set()
-        for websocket in self.connections[draft_id]:
+        for websocket in connections:
             try:
                 await websocket.send_json(message)
             except Exception:
@@ -67,9 +71,16 @@ class ConnectionManager:
         """Get or create a DraftRoom for the given draft."""
         async with self._lock:
             if draft_id not in self.rooms:
-                self.rooms[draft_id] = DraftRoom(draft_id)
-                # TODO: Load draft state from database
+                room = DraftRoom(draft_id)
+                room.is_loading = True
+                self.rooms[draft_id] = room
             return self.rooms[draft_id]
+
+    async def mark_room_loaded(self, draft_id: UUID):
+        """Mark a room as fully loaded."""
+        async with self._lock:
+            if draft_id in self.rooms:
+                self.rooms[draft_id].is_loading = False
 
     def get_connection_count(self, draft_id: UUID) -> int:
         """Get the number of connections in a draft room."""

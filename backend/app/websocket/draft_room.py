@@ -39,6 +39,8 @@ class DraftRoom:
         self.draft_id = draft_id
         self.status: str = "pending"  # pending, live, paused, completed
         self.format: str = "snake"  # snake, linear, auction
+        self.is_loading: bool = False  # Track if room is being loaded
+        self.load_lock = asyncio.Lock()  # Lock to prevent concurrent loading
 
         self.roster_size: int = 6
         self.timer_seconds: Optional[int] = 90
@@ -60,6 +62,13 @@ class DraftRoom:
 
     def get_state(self) -> dict:
         """Get the current state as a JSON-serializable dict."""
+        # Build a map of pokemon_id -> name for pick lookups
+        pokemon_names = {p.get("id") or p.get("pokemon_id"): p.get("name", "") for p in self.available_pokemon}
+        # Also include picked pokemon names
+        for pick in self.picks:
+            if pick.pokemon_id not in pokemon_names:
+                pokemon_names[pick.pokemon_id] = f"Pokemon #{pick.pokemon_id}"
+
         return {
             "draft_id": str(self.draft_id),
             "status": self.status,
@@ -83,13 +92,24 @@ class DraftRoom:
                 {
                     "pick_number": pick.pick_number,
                     "team_id": str(pick.team_id),
+                    "team_name": self.participants[pick.team_id].display_name if pick.team_id in self.participants else "Unknown",
                     "pokemon_id": pick.pokemon_id,
+                    "pokemon_name": pokemon_names.get(pick.pokemon_id, f"Pokemon #{pick.pokemon_id}"),
                     "points_spent": pick.points_spent,
                     "picked_at": pick.picked_at.isoformat(),
                 }
                 for pick in self.picks
             ],
-            "available_pokemon": self.available_pokemon,
+            "available_pokemon": [
+                {
+                    "id": p.get("id") or p.get("pokemon_id"),
+                    "name": p.get("name", ""),
+                    "types": p.get("types", []),
+                    "sprite": p.get("sprite", f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/{p.get('id') or p.get('pokemon_id')}.png"),
+                    "points": p.get("points"),
+                }
+                for p in self.available_pokemon
+            ],
             "budget_enabled": self.budget_enabled,
             "budget_per_team": self.budget_per_team,
         }

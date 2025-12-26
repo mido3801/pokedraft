@@ -22,6 +22,9 @@ httpx>=0.26.0
 # WebSocket support (included with uvicorn[standard])
 websockets>=12.0
 
+# JWT for Supabase token validation
+PyJWT>=2.8.0
+
 # Utilities
 python-dotenv>=1.0.0
 python-multipart>=0.0.6

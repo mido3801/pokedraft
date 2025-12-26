@@ -5,6 +5,16 @@ from app.models.draft import Draft, DraftPick
 from app.models.team import Team, TeamPokemon
 from app.models.match import Match
 from app.models.trade import Trade
+from app.models.pokemon import (
+    Pokemon,
+    PokemonType,
+    PokemonStat,
+    PokemonAbility,
+    PokemonSpecies,
+    PokemonTypeLink,
+    PokemonStatValue,
+    PokemonAbilityLink,
+)
 
 __all__ = [
     "User",
@@ -17,4 +27,12 @@ __all__ = [
     "TeamPokemon",
     "Match",
     "Trade",
+    "Pokemon",
+    "PokemonType",
+    "PokemonStat",
+    "PokemonAbility",
+    "PokemonSpecies",
+    "PokemonTypeLink",
+    "PokemonStatValue",
+    "PokemonAbilityLink",
 ]

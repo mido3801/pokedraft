@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     # Database (Supabase)
     SUPABASE_URL: str = ""
     SUPABASE_KEY: str = ""
+    SUPABASE_JWT_SECRET: str = ""
     DATABASE_URL: str = ""
 
     # Discord
@@ -31,6 +32,11 @@ class Settings(BaseSettings):
     # Draft settings
     DEFAULT_TIMER_SECONDS: int = 90
     ANONYMOUS_SESSION_EXPIRE_DAYS: int = 7
+
+    # Sprite settings
+    SPRITE_BASE_URL: str = "/static/sprites"
+    SPRITE_DIR: str = "/app/sprites"
+    DEFAULT_SPRITE_STYLE: str = "official-artwork"
 
     class Config:
         env_file = ".env"

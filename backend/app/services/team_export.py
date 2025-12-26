@@ -1,4 +1,6 @@
 from typing import List
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.services.pokeapi import pokeapi_service
 
 
@@ -8,7 +10,7 @@ class TeamExportService:
     """
 
     @staticmethod
-    async def to_showdown(team_name: str, pokemon_ids: List[int]) -> str:
+    async def to_showdown(team_name: str, pokemon_ids: List[int], db: AsyncSession) -> str:
         """
         Export team in Pokemon Showdown paste format.
 
@@ -21,7 +23,7 @@ class TeamExportService:
         lines = []
 
         for pokemon_id in pokemon_ids:
-            pokemon = await pokeapi_service.get_pokemon(pokemon_id)
+            pokemon = await pokeapi_service.get_pokemon(pokemon_id, db)
             if pokemon:
                 # Pokemon name (capitalized)
                 name = pokemon["name"].replace("-", " ").title()
@@ -37,12 +39,12 @@ class TeamExportService:
         return "\n".join(lines)
 
     @staticmethod
-    async def to_json(team_name: str, pokemon_ids: List[int]) -> dict:
+    async def to_json(team_name: str, pokemon_ids: List[int], db: AsyncSession) -> dict:
         """Export team as JSON with full Pokemon data."""
         pokemon_list = []
 
         for pokemon_id in pokemon_ids:
-            pokemon = await pokeapi_service.get_pokemon(pokemon_id)
+            pokemon = await pokeapi_service.get_pokemon(pokemon_id, db)
             if pokemon:
                 pokemon_list.append(pokemon)
 
@@ -52,12 +54,12 @@ class TeamExportService:
         }
 
     @staticmethod
-    async def to_csv(team_name: str, pokemon_ids: List[int]) -> str:
+    async def to_csv(team_name: str, pokemon_ids: List[int], db: AsyncSession) -> str:
         """Export team as CSV."""
         lines = ["id,name,types,hp,attack,defense,sp_attack,sp_defense,speed"]
 
         for pokemon_id in pokemon_ids:
-            pokemon = await pokeapi_service.get_pokemon(pokemon_id)
+            pokemon = await pokeapi_service.get_pokemon(pokemon_id, db)
             if pokemon:
                 stats = pokemon["stats"]
                 types = "/".join(pokemon["types"])

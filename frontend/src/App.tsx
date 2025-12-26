@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
+import { SpriteProvider } from './context/SpriteContext'
 import Layout from './components/Layout'
 import Home from './pages/Home'
 import Login from './pages/Login'
@@ -15,20 +16,22 @@ import NotFound from './pages/NotFound'
 function App() {
   return (
     <AuthProvider>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Home />} />
-          <Route path="login" element={<Login />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="leagues" element={<LeagueList />} />
-          <Route path="leagues/:leagueId" element={<LeagueDetail />} />
-          <Route path="seasons/:seasonId" element={<SeasonDetail />} />
-          <Route path="draft/create" element={<CreateDraft />} />
-          <Route path="draft/join" element={<JoinDraft />} />
-          <Route path="d/:draftId" element={<DraftRoom />} />
-          <Route path="*" element={<NotFound />} />
-        </Route>
-      </Routes>
+      <SpriteProvider>
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Home />} />
+            <Route path="login" element={<Login />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="leagues" element={<LeagueList />} />
+            <Route path="leagues/:leagueId" element={<LeagueDetail />} />
+            <Route path="seasons/:seasonId" element={<SeasonDetail />} />
+            <Route path="draft/create" element={<CreateDraft />} />
+            <Route path="draft/join" element={<JoinDraft />} />
+            <Route path="d/:draftId" element={<DraftRoom />} />
+            <Route path="*" element={<NotFound />} />
+          </Route>
+        </Routes>
+      </SpriteProvider>
     </AuthProvider>
   )
 }

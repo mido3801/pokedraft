@@ -19,6 +19,7 @@ interface AnonymousDraftResponse extends Draft {
   session_token: string
   rejoin_code: string
   join_url: string
+  team_id: string
 }
 
 export const draftService = {
@@ -31,7 +32,7 @@ export const draftService = {
   },
 
   async joinAnonymousDraft(rejoinCode: string, displayName: string): Promise<unknown> {
-    return api.post('/drafts/anonymous/join', null)
+    return api.post(`/drafts/anonymous/join?rejoin_code=${rejoinCode}&display_name=${encodeURIComponent(displayName)}`, null)
   },
 
   async getDraft(draftId: string): Promise<Draft> {

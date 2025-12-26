@@ -4,44 +4,185 @@
 
 @layer base {
   body {
-    @apply bg-gray-50 text-gray-900;
+    @apply bg-gray-50 text-gray-900 antialiased;
+  }
+
+  * {
+    @apply scroll-smooth;
   }
 }
 
 @layer components {
+  /* Buttons */
   .btn {
-    @apply px-4 py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2;
+    @apply px-5 py-2.5 rounded-xl font-semibold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 inline-flex items-center justify-center gap-2;
   }
 
   .btn-primary {
-    @apply bg-pokemon-red text-white hover:bg-red-700 focus:ring-pokemon-red;
+    @apply bg-gradient-to-r from-pokemon-red to-red-600 text-white hover:from-red-600 hover:to-red-700 focus:ring-pokemon-red shadow-sm hover:shadow-md;
   }
 
   .btn-secondary {
-    @apply bg-gray-200 text-gray-800 hover:bg-gray-300 focus:ring-gray-500;
+    @apply bg-gray-100 text-gray-800 hover:bg-gray-200 focus:ring-gray-400;
   }
 
   .btn-outline {
     @apply border-2 border-pokemon-red text-pokemon-red hover:bg-pokemon-red hover:text-white focus:ring-pokemon-red;
   }
 
-  .card {
-    @apply bg-white rounded-xl shadow-md p-6;
+  .btn-ghost {
+    @apply text-gray-600 hover:text-gray-900 hover:bg-gray-100;
   }
 
+  /* Cards */
+  .card {
+    @apply bg-white rounded-2xl shadow-sm border border-gray-100 p-6 transition-all duration-300 hover:shadow-md;
+  }
+
+  .card-interactive {
+    @apply bg-white rounded-2xl shadow-sm border border-gray-100 p-6 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 hover:border-gray-200 cursor-pointer;
+  }
+
+  /* Form Elements */
   .input {
-    @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pokemon-blue focus:border-transparent;
+    @apply w-full px-4 py-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-pokemon-blue/50 focus:border-pokemon-blue transition-all duration-200;
+  }
+
+  .input-error {
+    @apply border-red-300 focus:ring-red-500/50 focus:border-red-500;
   }
 
   .label {
-    @apply block text-sm font-medium text-gray-700 mb-1;
+    @apply block text-sm font-semibold text-gray-700 mb-2;
   }
 
+  .select {
+    @apply w-full px-4 py-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-pokemon-blue/50 focus:border-pokemon-blue transition-all duration-200 appearance-none cursor-pointer;
+  }
+
+  /* Pokemon-specific */
   .pokemon-card {
-    @apply bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow cursor-pointer border-2 border-transparent hover:border-pokemon-blue;
+    @apply bg-white rounded-2xl shadow-sm p-4 hover:shadow-xl transition-all duration-300 cursor-pointer border-2 border-transparent hover:border-pokemon-blue hover:-translate-y-1;
   }
 
   .type-badge {
-    @apply px-2 py-1 rounded text-white text-xs font-medium uppercase;
+    @apply px-3 py-1 rounded-full text-white text-xs font-bold uppercase tracking-wide shadow-sm;
+  }
+
+  /* Section Headers */
+  .section-header {
+    @apply flex items-center gap-3 mb-6;
+  }
+
+  .section-icon {
+    @apply w-10 h-10 rounded-xl flex items-center justify-center;
+  }
+
+  .section-title {
+    @apply text-xl font-bold text-gray-900;
+  }
+
+  /* Empty States */
+  .empty-state {
+    @apply text-center py-12 px-6;
+  }
+
+  .empty-state-icon {
+    @apply w-20 h-20 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4;
+  }
+
+  .empty-state-title {
+    @apply text-lg font-semibold text-gray-900 mb-2;
+  }
+
+  .empty-state-text {
+    @apply text-gray-500 mb-6 max-w-md mx-auto;
+  }
+
+  /* Status badges */
+  .badge {
+    @apply px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide;
+  }
+
+  .badge-success {
+    @apply bg-green-100 text-green-800;
+  }
+
+  .badge-warning {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+
+  .badge-error {
+    @apply bg-red-100 text-red-800;
+  }
+
+  .badge-info {
+    @apply bg-blue-100 text-blue-800;
+  }
+
+  /* Loader */
+  .loader {
+    @apply animate-spin rounded-full border-4 border-gray-200 border-t-pokemon-red;
+  }
+
+  /* Gradient backgrounds */
+  .gradient-pokemon-red {
+    @apply bg-gradient-to-br from-pokemon-red via-red-600 to-pokemon-red;
+  }
+
+  .gradient-pokemon-blue {
+    @apply bg-gradient-to-br from-pokemon-blue via-blue-600 to-pokemon-blue;
+  }
+}
+
+@layer utilities {
+  /* Animation utilities */
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.4s ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  /* Glass effect */
+  .glass {
+    @apply bg-white/80 backdrop-blur-md;
+  }
+
+  /* Text gradient */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-pokemon-red to-pokemon-blue;
   }
 }

@@ -99,3 +99,4 @@ class AnonymousDraftResponse(Draft):
     session_token: str
     rejoin_code: str
     join_url: str
+    team_id: str

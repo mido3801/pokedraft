@@ -3,6 +3,8 @@ import { DraftState, WebSocketEvent } from '../types'
 
 interface UseWebSocketOptions {
   draftId: string
+  teamId?: string | null
+  sessionToken?: string | null
   onStateUpdate?: (state: DraftState) => void
   onPickMade?: (data: { team_id: string; pokemon_id: number; pick_number: number }) => void
   onTurnStart?: (data: { team_id: string; timer_end: string }) => void
@@ -13,6 +15,8 @@ interface UseWebSocketOptions {
 
 export function useWebSocket({
   draftId,
+  teamId,
+  sessionToken,
   onStateUpdate,
   onPickMade,
   onTurnStart,
@@ -22,30 +26,76 @@ export function useWebSocket({
 }: UseWebSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null)
   const [isConnected, setIsConnected] = useState(false)
-  const [reconnectAttempts, setReconnectAttempts] = useState(0)
+  const reconnectAttemptsRef = useRef(0)
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isIntentionalCloseRef = useRef(false)
+
+  // Store callbacks in refs to avoid reconnection on callback changes
+  const callbacksRef = useRef({
+    onStateUpdate,
+    onPickMade,
+    onTurnStart,
+    onTimerTick,
+    onDraftComplete,
+    onError,
+  })
+
+  // Update callbacks ref when they change
+  useEffect(() => {
+    callbacksRef.current = {
+      onStateUpdate,
+      onPickMade,
+      onTurnStart,
+      onTimerTick,
+      onDraftComplete,
+      onError,
+    }
+  }, [onStateUpdate, onPickMade, onTurnStart, onTimerTick, onDraftComplete, onError])
 
   const connect = useCallback(() => {
+    // Clear any pending reconnect timeout
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current)
+      reconnectTimeoutRef.current = null
+    }
+
+    // Close existing connection if any (don't reconnect from this close)
+    if (wsRef.current) {
+      wsRef.current.onclose = null // Remove handler to prevent reconnect
+      wsRef.current.close()
+    }
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const wsUrl = `${protocol}//${window.location.host}/ws/draft/${draftId}`
 
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
+    isIntentionalCloseRef.current = false
 
     ws.onopen = () => {
       setIsConnected(true)
-      setReconnectAttempts(0)
-      console.log('WebSocket connected')
+      reconnectAttemptsRef.current = 0
+
+      // Send join_draft event to identify our team
+      if (teamId || sessionToken) {
+        ws.send(JSON.stringify({
+          event: 'join_draft',
+          data: {
+            team_id: teamId,
+            user_token: sessionToken,
+          },
+        }))
+      }
     }
 
     ws.onclose = () => {
       setIsConnected(false)
-      console.log('WebSocket disconnected')
 
-      // Attempt to reconnect with exponential backoff
-      if (reconnectAttempts < 5) {
-        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
-        setTimeout(() => {
-          setReconnectAttempts((prev) => prev + 1)
+      // Only reconnect if this wasn't an intentional close
+      if (!isIntentionalCloseRef.current && reconnectAttemptsRef.current < 5) {
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000)
+        reconnectAttemptsRef.current += 1
+        reconnectTimeoutRef.current = setTimeout(() => {
           connect()
         }, delay)
       }
@@ -58,25 +108,26 @@ export function useWebSocket({
     ws.onmessage = (event) => {
       try {
         const message: WebSocketEvent = JSON.parse(event.data)
+        const callbacks = callbacksRef.current
 
         switch (message.event) {
           case 'draft_state':
-            onStateUpdate?.(message.data)
+            callbacks.onStateUpdate?.(message.data)
             break
           case 'pick_made':
-            onPickMade?.(message.data)
+            callbacks.onPickMade?.(message.data)
             break
           case 'turn_start':
-            onTurnStart?.(message.data)
+            callbacks.onTurnStart?.(message.data)
             break
           case 'timer_tick':
-            onTimerTick?.(message.data)
+            callbacks.onTimerTick?.(message.data)
             break
           case 'draft_complete':
-            onDraftComplete?.(message.data)
+            callbacks.onDraftComplete?.(message.data)
             break
           case 'error':
-            onError?.(message.data)
+            callbacks.onError?.(message.data)
             break
         }
       } catch (error) {
@@ -85,12 +136,17 @@ export function useWebSocket({
     }
 
     return ws
-  }, [draftId, reconnectAttempts, onStateUpdate, onPickMade, onTurnStart, onTimerTick, onDraftComplete, onError])
+  }, [draftId, teamId, sessionToken])
 
   useEffect(() => {
     const ws = connect()
 
     return () => {
+      // Clear reconnect timeout on cleanup
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current)
+      }
+      isIntentionalCloseRef.current = true
       ws.close()
     }
   }, [connect])

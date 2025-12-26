@@ -144,6 +144,8 @@ export interface Pokemon {
   generation?: number
   stats?: PokemonStats
   abilities?: string[]
+  is_legendary?: boolean
+  is_mythical?: boolean
 }
 
 export interface PokemonStats {
