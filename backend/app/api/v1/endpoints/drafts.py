@@ -20,6 +20,7 @@ from app.schemas.draft import (
     AnonymousDraftCreate,
     AnonymousDraftResponse,
     PokemonPoolEntry,
+    PokemonFilters,
 )
 from app.schemas.team import ShowdownExport
 from app.models.draft import Draft as DraftModel, DraftPick, DraftStatus
@@ -92,6 +93,59 @@ async def create_draft(
     return db_draft
 
 
+def _apply_pokemon_filters(pokemon_list: list[dict], filters: PokemonFilters) -> list[dict]:
+    """Apply filters to a list of Pokemon and return filtered list."""
+    filtered = []
+    custom_inclusions_set = set(filters.custom_inclusions)
+    custom_exclusions_set = set(filters.custom_exclusions)
+
+    for p in pokemon_list:
+        pokemon_id = p["id"]
+
+        # Force include if in custom_inclusions (overrides all filters)
+        if pokemon_id in custom_inclusions_set:
+            filtered.append(p)
+            continue
+
+        # Skip if in custom_exclusions
+        if pokemon_id in custom_exclusions_set:
+            continue
+
+        # Check generation filter
+        gen = p.get("generation")
+        if gen is not None and gen not in filters.generations:
+            continue
+
+        # Check evolution stage filter
+        evo_stage = p.get("evolution_stage")
+        if evo_stage is not None and evo_stage not in filters.evolution_stages:
+            continue
+
+        # Check legendary filter
+        if not filters.include_legendary and p.get("is_legendary", False):
+            continue
+
+        # Check mythical filter
+        if not filters.include_mythical and p.get("is_mythical", False):
+            continue
+
+        # Check type filter (if types specified, Pokemon must have at least one matching type)
+        if filters.types:
+            pokemon_types = p.get("types", [])
+            if not any(t in filters.types for t in pokemon_types):
+                continue
+
+        # Check BST filter
+        bst = p.get("bst")
+        if bst is not None:
+            if bst < filters.bst_min or bst > filters.bst_max:
+                continue
+
+        filtered.append(p)
+
+    return filtered
+
+
 @router.post("/anonymous", response_model=AnonymousDraftResponse, status_code=status.HTTP_201_CREATED)
 async def create_anonymous_draft(
     draft: AnonymousDraftCreate,
@@ -112,14 +166,23 @@ async def create_anonymous_draft(
                 "generation": entry.generation,
             }
     else:
-        # Load default Pokemon pool from database (Gen 1-9, default forms only)
-        all_pokemon = await pokeapi_service.get_all_pokemon(db, limit=1025)
+        # Load all Pokemon from database with full metadata
+        all_pokemon = await pokeapi_service.get_all_pokemon_for_box(db)
+
+        # Apply filters if provided
+        if draft.pokemon_filters:
+            all_pokemon = _apply_pokemon_filters(all_pokemon, draft.pokemon_filters)
+
         for p in all_pokemon:
             pokemon_pool[str(p["id"])] = {
                 "name": p["name"],
                 "points": None,
                 "types": p["types"],
                 "generation": p.get("generation"),
+                "bst": p.get("bst"),
+                "evolution_stage": p.get("evolution_stage"),
+                "is_legendary": p.get("is_legendary", False),
+                "is_mythical": p.get("is_mythical", False),
             }
 
     # Generate UUIDs explicitly so they're available before commit
@@ -348,6 +411,7 @@ async def get_draft_state(
 @router.post("/{draft_id}/start")
 async def start_draft(
     draft_id: UUID,
+    session_token: Optional[str] = Query(None, description="Session token for anonymous drafts"),
     current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
@@ -362,6 +426,27 @@ async def start_draft(
 
     if draft.status != DraftStatus.PENDING:
         raise HTTPException(status_code=400, detail="Draft is not in pending state")
+
+    # Verify authorization - must be draft creator
+    if draft.session_token:
+        # Anonymous draft - verify session token matches creator
+        if session_token != draft.session_token:
+            raise HTTPException(status_code=403, detail="Only the draft creator can start the draft")
+    elif draft.season_id:
+        # League draft - verify user is league owner
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        season_result = await db.execute(
+            select(SeasonModel).where(SeasonModel.id == draft.season_id)
+        )
+        season = season_result.scalar_one_or_none()
+        if season:
+            league_result = await db.execute(
+                select(LeagueModel).where(LeagueModel.id == season.league_id)
+            )
+            league = league_result.scalar_one_or_none()
+            if not league or league.owner_id != current_user.id:
+                raise HTTPException(status_code=403, detail="Only the league owner can start the draft")
 
     # Get teams and set pick order
     teams_result = await db.execute(

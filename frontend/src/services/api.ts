@@ -1,4 +1,17 @@
 const API_BASE = '/api/v1'
+const TOKEN_KEY = 'pokedraft_token'
+
+export function getStoredToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY)
+}
+
+export function setStoredToken(token: string): void {
+  localStorage.setItem(TOKEN_KEY, token)
+}
+
+export function clearStoredToken(): void {
+  localStorage.removeItem(TOKEN_KEY)
+}
 
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
@@ -16,10 +29,16 @@ class ApiClient {
   async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
     const { method = 'GET', body, headers = {} } = options
 
+    const token = getStoredToken()
+    const authHeaders: Record<string, string> = token
+      ? { Authorization: `Bearer ${token}` }
+      : {}
+
     const config: RequestInit = {
       method,
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
         ...headers,
       },
       credentials: 'include',

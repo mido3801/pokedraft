@@ -1,6 +1,6 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from uuid import UUID
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict
 
 from sqlalchemy import select
@@ -37,6 +37,7 @@ async def load_draft_state(draft_id: UUID, room: DraftRoom):
         room.budget_enabled = draft.budget_enabled
         room.budget_per_team = draft.budget_per_team
         room.current_pick = draft.current_pick
+        room.rejoin_code = draft.rejoin_code
 
         # Load pokemon pool
         room.available_pokemon = []
@@ -46,6 +47,11 @@ async def load_draft_state(draft_id: UUID, room: DraftRoom):
                 "name": data.get("name", ""),
                 "points": data.get("points"),
                 "types": data.get("types", []),
+                "stats": data.get("stats"),
+                "generation": data.get("generation"),
+                "is_legendary": data.get("is_legendary", False),
+                "is_mythical": data.get("is_mythical", False),
+                "abilities": data.get("abilities", []),
             })
 
         # Load teams
@@ -143,8 +149,24 @@ async def complete_draft_in_db(draft_id: UUID):
         draft = result.scalar_one_or_none()
         if draft:
             draft.status = DraftStatus.COMPLETED
-            draft.completed_at = datetime.now(timezone.utc)
+            draft.completed_at = datetime.utcnow()
             await db.commit()
+
+
+async def start_draft_in_db(draft_id: UUID, pick_order: list[UUID]) -> bool:
+    """Start the draft in database."""
+    async with async_session_maker() as db:
+        result = await db.execute(
+            select(DraftModel).where(DraftModel.id == draft_id)
+        )
+        draft = result.scalar_one_or_none()
+        if draft and draft.status == DraftStatus.PENDING:
+            draft.status = DraftStatus.LIVE
+            draft.started_at = datetime.utcnow()
+            draft.pick_order = [str(tid) for tid in pick_order]
+            await db.commit()
+            return True
+        return False
 
 
 @router.websocket("/ws/draft/{draft_id}")
@@ -195,6 +217,8 @@ async def draft_websocket(websocket: WebSocket, draft_id: UUID):
                 await handle_join(websocket, draft_id, data.get("data", {}))
             elif event == "make_pick":
                 await handle_pick(websocket, draft_id, data.get("data", {}))
+            elif event == "start_draft":
+                await handle_start_draft(websocket, draft_id, data.get("data", {}))
             elif event == "place_bid":
                 await handle_bid(websocket, draft_id, data.get("data", {}))
             elif event == "nominate":
@@ -305,6 +329,70 @@ async def handle_join(websocket: WebSocket, draft_id: UUID, data: dict):
             "event": "error",
             "data": {"message": "Team not found", "code": "TEAM_NOT_FOUND"},
         })
+
+
+async def handle_start_draft(websocket: WebSocket, draft_id: UUID, data: dict):
+    """Handle starting the draft."""
+    room = await manager.get_or_create_room(draft_id)
+
+    # Verify draft is pending
+    if room.status != "pending":
+        await websocket.send_json({
+            "event": "error",
+            "data": {"message": "Draft is not in pending state", "code": "DRAFT_NOT_PENDING"},
+        })
+        return
+
+    # Verify the sender is in the draft
+    team_id = websocket_to_team.get(websocket)
+    if not team_id:
+        await websocket.send_json({
+            "event": "error",
+            "data": {"message": "You are not in this draft", "code": "NOT_IN_DRAFT"},
+        })
+        return
+
+    # Verify sender is the draft creator (draft_position == 0)
+    participant = room.participants.get(team_id)
+    if not participant or participant.draft_position != 0:
+        await websocket.send_json({
+            "event": "error",
+            "data": {"message": "Only the draft creator can start the draft", "code": "NOT_CREATOR"},
+        })
+        return
+
+    # Verify at least 2 teams
+    if len(room.participants) < 2:
+        await websocket.send_json({
+            "event": "error",
+            "data": {"message": "Need at least 2 teams to start", "code": "NOT_ENOUGH_TEAMS"},
+        })
+        return
+
+    # Start the draft
+    room.status = "live"
+    room.pick_order = sorted(room.pick_order, key=lambda tid: room.participants[tid].draft_position)
+
+    # Set timer if applicable
+    if room.timer_seconds:
+        room.timer_end = datetime.now(timezone.utc).replace(microsecond=0) + \
+            timedelta(seconds=room.timer_seconds)
+
+    # Save to database
+    await start_draft_in_db(draft_id, room.pick_order)
+
+    # Broadcast draft started to all clients
+    first_team = room.get_current_team()
+    await manager.broadcast(draft_id, {
+        "event": "draft_started",
+        "data": {
+            "status": "live",
+            "pick_order": [str(tid) for tid in room.pick_order],
+            "current_team_id": str(first_team) if first_team else None,
+            "current_team_name": room.participants[first_team].display_name if first_team else None,
+            "timer_end": room.timer_end.isoformat() if room.timer_end else None,
+        },
+    })
 
 
 async def handle_pick(websocket: WebSocket, draft_id: UUID, data: dict):

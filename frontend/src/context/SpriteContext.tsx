@@ -2,14 +2,14 @@ import { createContext, useContext, useState, useCallback, ReactNode } from 'rea
 
 export type SpriteStyle = 'default' | 'official-artwork' | 'home'
 
-// Sprite URL paths for each style
+// Sprite URL paths for each style (using PokeAPI CDN)
 const SPRITE_PATHS: Record<SpriteStyle, string> = {
   'default': '',
   'official-artwork': 'other/official-artwork',
   'home': 'other/home',
 }
 
-const SPRITE_BASE_URL = '/static/sprites'
+const SPRITE_BASE_URL = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon'
 
 interface SpriteContextType {
   spriteStyle: SpriteStyle

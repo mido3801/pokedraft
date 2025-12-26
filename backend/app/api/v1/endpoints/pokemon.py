@@ -11,6 +11,7 @@ from app.services.sprites import SpriteStyle, get_all_sprite_urls
 from app.schemas.pokemon import (
     Pokemon,
     PokemonList,
+    PokemonBoxResponse,
     PokemonSummary,
     PokemonTypeResponse,
     SpriteUrls,
@@ -56,6 +57,23 @@ async def search_pokemon(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get("/box", response_model=PokemonBoxResponse)
+async def get_all_pokemon_for_box(
+    sprite_style: Optional[SpriteStyle] = Query(SpriteStyle.DEFAULT, description="Sprite style to use"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get all Pokemon with metadata for the box display.
+
+    Returns all Pokemon with: id, name, sprite, types, generation, bst,
+    evolution_stage, is_legendary, is_mythical.
+
+    Optimized for rendering the Pokemon selection box on draft creation.
+    """
+    pokemon = await pokeapi_service.get_all_pokemon_for_box(db, sprite_style)
+    return PokemonBoxResponse(pokemon=pokemon, total=len(pokemon))
 
 
 @router.get("/types", response_model=List[PokemonTypeResponse])

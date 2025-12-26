@@ -17,6 +17,49 @@ class PokemonPoolEntry(BaseModel):
     generation: Optional[int] = None
 
 
+class PokemonFilters(BaseModel):
+    """Filters to apply when building the Pokemon pool."""
+
+    generations: list[int] = Field(
+        default=[1, 2, 3, 4, 5, 6, 7, 8, 9],
+        description="Which generations to include (1-9)"
+    )
+    evolution_stages: list[int] = Field(
+        default=[0, 1, 2],
+        description="Evolution stages to include: 0=unevolved, 1=middle, 2=fully evolved"
+    )
+    include_legendary: bool = Field(
+        default=True,
+        description="Include legendary Pokemon"
+    )
+    include_mythical: bool = Field(
+        default=True,
+        description="Include mythical Pokemon"
+    )
+    types: list[str] = Field(
+        default=[],
+        description="Filter by types (empty = all types allowed)"
+    )
+    bst_min: int = Field(
+        default=0,
+        ge=0,
+        description="Minimum base stat total"
+    )
+    bst_max: int = Field(
+        default=999,
+        le=999,
+        description="Maximum base stat total"
+    )
+    custom_exclusions: list[int] = Field(
+        default=[],
+        description="Pokemon IDs to exclude from the pool"
+    )
+    custom_inclusions: list[int] = Field(
+        default=[],
+        description="Pokemon IDs to force include (overrides other filters)"
+    )
+
+
 class DraftBase(BaseModel):
     """Base draft schema."""
 
@@ -25,6 +68,10 @@ class DraftBase(BaseModel):
     budget_enabled: bool = False
     budget_per_team: Optional[int] = None
     roster_size: int = Field(default=6, ge=1, le=20)
+    # Auction-specific settings
+    nomination_timer_seconds: Optional[int] = None
+    min_bid: Optional[int] = Field(default=1, ge=1)
+    bid_increment: Optional[int] = Field(default=1, ge=1)
 
 
 class DraftCreate(DraftBase):
@@ -65,6 +112,10 @@ class DraftState(BaseModel):
     available_pokemon: list[PokemonPoolEntry]
     budget_enabled: bool
     budget_per_team: Optional[int] = None
+    # Auction-specific settings
+    nomination_timer_seconds: Optional[int] = None
+    min_bid: Optional[int] = None
+    bid_increment: Optional[int] = None
 
 
 class Draft(DraftBase):
@@ -90,6 +141,7 @@ class AnonymousDraftCreate(DraftBase):
 
     display_name: str = Field(..., min_length=1, max_length=50)
     pokemon_pool: list[PokemonPoolEntry] = []
+    pokemon_filters: Optional[PokemonFilters] = None
     template_id: Optional[str] = None
 
 

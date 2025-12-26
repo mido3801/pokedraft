@@ -37,9 +37,10 @@ export default function JoinDraft() {
         displayName.trim()
       ) as JoinResponse
 
-      // Store session token for reconnection
+      // Store session token and rejoin code for reconnection
       localStorage.setItem(`draft_session_${response.draft_id}`, response.session_token)
       localStorage.setItem(`draft_team_${response.draft_id}`, response.team_id)
+      localStorage.setItem(`draft_rejoin_${response.draft_id}`, rejoinCode.trim().toUpperCase())
       localStorage.setItem('last_draft_id', response.draft_id)
 
       navigate(`/d/${response.draft_id}`)

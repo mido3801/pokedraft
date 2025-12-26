@@ -7,6 +7,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import LeagueList from './pages/LeagueList'
 import LeagueDetail from './pages/LeagueDetail'
+import LeagueSettings from './pages/LeagueSettings'
 import SeasonDetail from './pages/SeasonDetail'
 import DraftRoom from './pages/DraftRoom'
 import CreateDraft from './pages/CreateDraft'
@@ -24,6 +25,7 @@ function App() {
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="leagues" element={<LeagueList />} />
             <Route path="leagues/:leagueId" element={<LeagueDetail />} />
+            <Route path="leagues/:leagueId/settings" element={<LeagueSettings />} />
             <Route path="seasons/:seasonId" element={<SeasonDetail />} />
             <Route path="draft/create" element={<CreateDraft />} />
             <Route path="draft/join" element={<JoinDraft />} />

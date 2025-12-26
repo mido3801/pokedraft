@@ -1,12 +1,5 @@
 import { api } from './api'
-import { Match, Standings } from '../types'
-
-export type ScheduleFormat = 'round_robin' | 'double_round_robin' | 'swiss' | 'single_elimination' | 'double_elimination' | 'random_weekly' | 'custom'
-
-interface GenerateScheduleParams {
-  format: ScheduleFormat
-  start_date?: string
-}
+import { Match, Standings, BracketState, ScheduleFormat, GenerateScheduleParams } from '../types'
 
 interface RecordResultParams {
   winner_id?: string
@@ -24,6 +17,10 @@ export const matchService = {
     return api.post<Match[]>(`/matches/schedule?season_id=${seasonId}`, params)
   },
 
+  async getBracket(seasonId: string): Promise<BracketState> {
+    return api.get<BracketState>(`/matches/bracket?season_id=${seasonId}`)
+  },
+
   async getStandings(seasonId: string): Promise<Standings> {
     return api.get<Standings>(`/matches/standings?season_id=${seasonId}`)
   },
@@ -36,3 +33,6 @@ export const matchService = {
     return api.post<Match>(`/matches/${matchId}/result`, params)
   },
 }
+
+// Re-export ScheduleFormat for backwards compatibility
+export type { ScheduleFormat }

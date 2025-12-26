@@ -1,5 +1,5 @@
 import { api } from './api'
-import { Draft, DraftState } from '../types'
+import { Draft, DraftState, PokemonFilters } from '../types'
 
 interface CreateDraftParams {
   format: string
@@ -8,7 +8,12 @@ interface CreateDraftParams {
   budget_per_team?: number
   roster_size: number
   pokemon_pool?: unknown[]
+  pokemon_filters?: PokemonFilters
   template_id?: string
+  // Auction-specific settings
+  nomination_timer_seconds?: number
+  min_bid?: number
+  bid_increment?: number
 }
 
 interface CreateAnonymousDraftParams extends CreateDraftParams {

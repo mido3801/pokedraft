@@ -49,12 +49,24 @@ def decode_supabase_token(token: str) -> Optional[dict]:
                 algorithms=["HS256"],
                 audience="authenticated",
             )
+        elif settings.DEV_MODE:
+            # Development mode - try SECRET_KEY first (for dev tokens), then decode without verification
+            try:
+                payload = jwt.decode(
+                    token,
+                    settings.SECRET_KEY,
+                    algorithms=["HS256"],
+                    audience="authenticated",
+                )
+            except PyJWTError:
+                # Fallback: decode without verification for other dev scenarios
+                payload = jwt.decode(
+                    token,
+                    options={"verify_signature": False},
+                )
         else:
-            # Development mode - decode without verification
-            payload = jwt.decode(
-                token,
-                options={"verify_signature": False},
-            )
+            # No JWT secret configured and not in dev mode
+            return None
         return payload
     except PyJWTError:
         return None

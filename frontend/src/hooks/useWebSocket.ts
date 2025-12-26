@@ -10,6 +10,9 @@ interface UseWebSocketOptions {
   onTurnStart?: (data: { team_id: string; timer_end: string }) => void
   onTimerTick?: (data: { seconds_remaining: number }) => void
   onDraftComplete?: (data: { final_teams: unknown[] }) => void
+  onDraftStarted?: (data: { status: string; pick_order: string[]; current_team_id: string; current_team_name: string; timer_end?: string }) => void
+  onUserJoined?: (data: { team_id: string; display_name: string }) => void
+  onUserLeft?: (data: { team_id: string; display_name: string }) => void
   onError?: (data: { message: string; code: string }) => void
 }
 
@@ -22,6 +25,9 @@ export function useWebSocket({
   onTurnStart,
   onTimerTick,
   onDraftComplete,
+  onDraftStarted,
+  onUserJoined,
+  onUserLeft,
   onError,
 }: UseWebSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null)
@@ -37,6 +43,9 @@ export function useWebSocket({
     onTurnStart,
     onTimerTick,
     onDraftComplete,
+    onDraftStarted,
+    onUserJoined,
+    onUserLeft,
     onError,
   })
 
@@ -48,9 +57,12 @@ export function useWebSocket({
       onTurnStart,
       onTimerTick,
       onDraftComplete,
+      onDraftStarted,
+      onUserJoined,
+      onUserLeft,
       onError,
     }
-  }, [onStateUpdate, onPickMade, onTurnStart, onTimerTick, onDraftComplete, onError])
+  }, [onStateUpdate, onPickMade, onTurnStart, onTimerTick, onDraftComplete, onDraftStarted, onUserJoined, onUserLeft, onError])
 
   const connect = useCallback(() => {
     // Clear any pending reconnect timeout
@@ -126,6 +138,15 @@ export function useWebSocket({
           case 'draft_complete':
             callbacks.onDraftComplete?.(message.data)
             break
+          case 'draft_started':
+            callbacks.onDraftStarted?.(message.data)
+            break
+          case 'user_joined':
+            callbacks.onUserJoined?.(message.data)
+            break
+          case 'user_left':
+            callbacks.onUserLeft?.(message.data)
+            break
           case 'error':
             callbacks.onError?.(message.data)
             break
@@ -169,11 +190,16 @@ export function useWebSocket({
     send('nominate', { pokemon_id: pokemonId })
   }, [send])
 
+  const startDraft = useCallback(() => {
+    send('start_draft', {})
+  }, [send])
+
   return {
     isConnected,
     send,
     makePick,
     placeBid,
     nominate,
+    startDraft,
   }
 }

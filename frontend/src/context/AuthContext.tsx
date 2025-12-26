@@ -6,6 +6,7 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   login: () => Promise<void>
+  devLogin: () => Promise<void>
   logout: () => Promise<void>
   isAuthenticated: boolean
 }
@@ -37,6 +38,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await authService.login()
   }
 
+  const devLogin = async () => {
+    try {
+      const user = await authService.devLogin()
+      setUser(user)
+    } catch (error) {
+      console.error('Dev login failed:', error)
+      throw error
+    }
+  }
+
   const logout = async () => {
     await authService.logout()
     setUser(null)
@@ -48,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         loading,
         login,
+        devLogin,
         logout,
         isAuthenticated: !!user,
       }}

@@ -1,6 +1,5 @@
 import { Outlet, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import SpriteStyleToggle from './SpriteStyleToggle'
 
 export default function Layout() {
   const { user, isAuthenticated, login, logout } = useAuth()
@@ -31,7 +30,6 @@ export default function Layout() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <SpriteStyleToggle />
               {isAuthenticated ? (
                 <>
                   <span className="text-sm">{user?.display_name}</span>

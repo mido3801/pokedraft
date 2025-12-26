@@ -4,9 +4,10 @@ import { useState } from 'react'
 import { teamService } from '../services/team'
 import { matchService, ScheduleFormat } from '../services/match'
 import { tradeService } from '../services/trade'
-import { Season, Match, Trade } from '../types'
+import { Season, Match, Trade, SeedingMode } from '../types'
 import { api } from '../services/api'
 import { useSprite } from '../context/SpriteContext'
+import BracketDisplay from '../components/BracketDisplay'
 
 // Need to add a season service endpoint
 const getSeason = async (seasonId: string): Promise<Season & { league_name?: string; league_id?: string; draft_id?: string }> => {
@@ -20,6 +21,8 @@ export default function SeasonDetail() {
   const [activeTab, setActiveTab] = useState<'standings' | 'schedule' | 'teams' | 'trades'>('standings')
   const [showScheduleModal, setShowScheduleModal] = useState(false)
   const [scheduleFormat, setScheduleFormat] = useState<ScheduleFormat>('round_robin')
+  const [seedingMode, setSeedingMode] = useState<SeedingMode>('standings')
+  const [includeBracketReset, setIncludeBracketReset] = useState(true)
   const [showResultModal, setShowResultModal] = useState(false)
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null)
   const [resultForm, setResultForm] = useState<{ winner_id: string; is_tie: boolean; replay_url: string; notes: string }>({
@@ -53,6 +56,16 @@ export default function SeasonDetail() {
     enabled: !!seasonId,
   })
 
+  // Check if schedule is a bracket format
+  const isBracketFormat = schedule && schedule.length > 0 &&
+    (schedule[0].schedule_format === 'single_elimination' || schedule[0].schedule_format === 'double_elimination')
+
+  const { data: bracket } = useQuery({
+    queryKey: ['season-bracket', seasonId],
+    queryFn: () => matchService.getBracket(seasonId!),
+    enabled: !!seasonId && isBracketFormat,
+  })
+
   const { data: trades } = useQuery({
     queryKey: ['season-trades', seasonId],
     queryFn: () => tradeService.getTrades(seasonId!),
@@ -60,9 +73,14 @@ export default function SeasonDetail() {
   })
 
   const generateScheduleMutation = useMutation({
-    mutationFn: () => matchService.generateSchedule(seasonId!, { format: scheduleFormat }),
+    mutationFn: () => matchService.generateSchedule(seasonId!, {
+      format: scheduleFormat,
+      use_standings_seeding: seedingMode === 'standings',
+      include_bracket_reset: includeBracketReset,
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['season-schedule', seasonId] })
+      queryClient.invalidateQueries({ queryKey: ['season-bracket', seasonId] })
       setShowScheduleModal(false)
     },
   })
@@ -78,6 +96,7 @@ export default function SeasonDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['season-schedule', seasonId] })
       queryClient.invalidateQueries({ queryKey: ['season-standings', seasonId] })
+      queryClient.invalidateQueries({ queryKey: ['season-bracket', seasonId] })
       setShowResultModal(false)
       setSelectedMatch(null)
     },
@@ -178,11 +197,47 @@ export default function SeasonDetail() {
                 >
                   <option value="round_robin">Round Robin (everyone plays once)</option>
                   <option value="double_round_robin">Double Round Robin (everyone plays twice)</option>
-                  <option value="swiss">Swiss (match similar records)</option>
                   <option value="single_elimination">Single Elimination Bracket</option>
                   <option value="double_elimination">Double Elimination Bracket</option>
                 </select>
               </div>
+
+              {/* Seeding options for bracket formats */}
+              {(scheduleFormat === 'single_elimination' || scheduleFormat === 'double_elimination') && (
+                <>
+                  <div>
+                    <label className="label">Seeding</label>
+                    <select
+                      value={seedingMode}
+                      onChange={(e) => setSeedingMode(e.target.value as SeedingMode)}
+                      className="input"
+                    >
+                      <option value="standings">Auto-seed from Standings</option>
+                      <option value="random">Random Seeding</option>
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {seedingMode === 'standings'
+                        ? 'Top ranked teams will be seeded higher (1 vs 8, 4 vs 5, etc.)'
+                        : 'Teams will be randomly assigned bracket positions'}
+                    </p>
+                  </div>
+
+                  {scheduleFormat === 'double_elimination' && (
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        id="bracketReset"
+                        checked={includeBracketReset}
+                        onChange={(e) => setIncludeBracketReset(e.target.checked)}
+                        className="h-4 w-4 text-pokemon-red rounded border-gray-300"
+                      />
+                      <label htmlFor="bracketReset" className="ml-2 text-sm text-gray-700">
+                        Include bracket reset in Grand Finals
+                      </label>
+                    </div>
+                  )}
+                </>
+              )}
 
               <div className="flex gap-2">
                 <button
@@ -219,18 +274,21 @@ export default function SeasonDetail() {
             </p>
 
             <div className="space-y-4">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="isTie"
-                  checked={resultForm.is_tie}
-                  onChange={(e) => setResultForm({ ...resultForm, is_tie: e.target.checked, winner_id: '' })}
-                  className="h-4 w-4 text-pokemon-red rounded border-gray-300"
-                />
-                <label htmlFor="isTie" className="ml-2 text-sm text-gray-700">
-                  Match ended in a tie
-                </label>
-              </div>
+              {/* Only show tie option for non-bracket matches */}
+              {selectedMatch.schedule_format !== 'single_elimination' && selectedMatch.schedule_format !== 'double_elimination' && (
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="isTie"
+                    checked={resultForm.is_tie}
+                    onChange={(e) => setResultForm({ ...resultForm, is_tie: e.target.checked, winner_id: '' })}
+                    className="h-4 w-4 text-pokemon-red rounded border-gray-300"
+                  />
+                  <label htmlFor="isTie" className="ml-2 text-sm text-gray-700">
+                    Match ended in a tie
+                  </label>
+                </div>
+              )}
 
               {!resultForm.is_tie && (
                 <div>
@@ -383,16 +441,20 @@ export default function SeasonDetail() {
         <div className="card">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold">Schedule</h2>
-            {season.status === 'active' && schedule && schedule.length === 0 && (
+            {season.status === 'active' && (!schedule || schedule.length === 0) && (
               <button onClick={() => setShowScheduleModal(true)} className="btn btn-secondary text-sm">
                 Generate Schedule
               </button>
             )}
           </div>
-          {schedule && schedule.length > 0 ? (
+
+          {/* Show bracket display for bracket formats */}
+          {bracket ? (
+            <BracketDisplay bracket={bracket} onRecordResult={openResultModal} />
+          ) : schedule && schedule.length > 0 ? (
             <div className="space-y-4">
-              {/* Group matches by week */}
-              {Array.from(new Set(schedule.map((m) => m.week))).map((week) => (
+              {/* Group matches by week for round-robin formats */}
+              {Array.from(new Set(schedule.map((m) => m.week))).sort((a, b) => a - b).map((week) => (
                 <div key={week}>
                   <h3 className="font-medium text-gray-700 mb-2">Week {week}</h3>
                   <div className="space-y-2">

@@ -1,8 +1,10 @@
 import { useAuth } from '../context/AuthContext'
 import { Navigate } from 'react-router-dom'
+import { useState } from 'react'
 
 export default function Login() {
-  const { isAuthenticated, login, loading } = useAuth()
+  const { isAuthenticated, login, devLogin, loading } = useAuth()
+  const [devLoading, setDevLoading] = useState(false)
 
   if (loading) {
     return (
@@ -47,6 +49,24 @@ export default function Login() {
             <GoogleIcon className="w-5 h-5 mr-3" />
             Continue with Google
           </button>
+
+          {/* Dev login - only shown in development */}
+          {import.meta.env.DEV && (
+            <button
+              onClick={async () => {
+                setDevLoading(true)
+                try {
+                  await devLogin()
+                } finally {
+                  setDevLoading(false)
+                }
+              }}
+              disabled={devLoading}
+              className="w-full flex items-center justify-center px-4 py-3 border-2 border-dashed border-yellow-400 rounded-lg bg-yellow-50 text-yellow-700 hover:bg-yellow-100 disabled:opacity-50"
+            >
+              {devLoading ? 'Logging in...' : '🔧 Dev Login (Local Only)'}
+            </button>
+          )}
         </div>
 
         <p className="mt-8 text-center text-sm text-gray-500">

@@ -46,6 +46,7 @@ class DraftRoom:
         self.timer_seconds: Optional[int] = 90
         self.budget_enabled: bool = False
         self.budget_per_team: Optional[int] = None
+        self.rejoin_code: Optional[str] = None
 
         self.current_pick: int = 0
         self.timer_end: Optional[datetime] = None
@@ -71,6 +72,7 @@ class DraftRoom:
 
         return {
             "draft_id": str(self.draft_id),
+            "rejoin_code": self.rejoin_code,
             "status": self.status,
             "format": self.format,
             "current_pick": self.current_pick,
@@ -107,6 +109,11 @@ class DraftRoom:
                     "types": p.get("types", []),
                     "sprite": p.get("sprite", f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/{p.get('id') or p.get('pokemon_id')}.png"),
                     "points": p.get("points"),
+                    "stats": p.get("stats"),
+                    "generation": p.get("generation"),
+                    "is_legendary": p.get("is_legendary", False),
+                    "is_mythical": p.get("is_mythical", False),
+                    "abilities": p.get("abilities", []),
                 }
                 for p in self.available_pokemon
             ],

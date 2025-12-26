@@ -47,6 +47,10 @@ class Draft(Base):
     budget_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     budget_per_team: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     roster_size: Mapped[int] = mapped_column(Integer, default=6)
+    # Auction-specific settings
+    nomination_timer_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    min_bid: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=1)
+    bid_increment: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=1)
     status: Mapped[DraftStatus] = mapped_column(Enum(DraftStatus), default=DraftStatus.PENDING)
     current_pick: Mapped[int] = mapped_column(Integer, default=0)
     pokemon_pool: Mapped[dict] = mapped_column(JSONB, default=dict)

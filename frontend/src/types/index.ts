@@ -69,10 +69,15 @@ export interface Draft {
   created_at: string
   started_at?: string
   completed_at?: string
+  // Auction-specific settings
+  nomination_timer_seconds?: number
+  min_bid?: number
+  bid_increment?: number
 }
 
 export interface DraftState {
   draft_id: string
+  rejoin_code?: string
   status: DraftStatus
   format: DraftFormat
   current_pick: number
@@ -85,6 +90,10 @@ export interface DraftState {
   available_pokemon: Pokemon[]
   budget_enabled: boolean
   budget_per_team?: number
+  // Auction-specific settings
+  nomination_timer_seconds?: number
+  min_bid?: number
+  bid_increment?: number
 }
 
 export interface DraftTeam {
@@ -146,6 +155,8 @@ export interface Pokemon {
   abilities?: string[]
   is_legendary?: boolean
   is_mythical?: boolean
+  bst?: number
+  evolution_stage?: number // 0=unevolved, 1=middle, 2=fully evolved
 }
 
 export interface PokemonStats {
@@ -157,13 +168,84 @@ export interface PokemonStats {
   speed: number
 }
 
+// Pokemon box display (optimized data)
+export interface PokemonBoxEntry {
+  id: number
+  name: string
+  sprite: string
+  types: string[]
+  generation: number
+  bst: number
+  evolution_stage: number // 0=unevolved, 1=middle, 2=fully evolved
+  is_legendary: boolean
+  is_mythical: boolean
+}
+
+// Point values map (pokemon_id -> points)
+export type PokemonPointsMap = Record<number, number>
+
+export interface PokemonBoxResponse {
+  pokemon: PokemonBoxEntry[]
+  total: number
+}
+
+// Pokemon filters for draft creation
+export interface PokemonFilters {
+  generations: number[]
+  evolution_stages: number[]
+  include_legendary: boolean
+  include_mythical: boolean
+  types: string[]
+  bst_min: number
+  bst_max: number
+  custom_exclusions: number[]
+  custom_inclusions: number[]
+}
+
+// Default filters (all Pokemon included)
+export const DEFAULT_POKEMON_FILTERS: PokemonFilters = {
+  generations: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+  evolution_stages: [0, 1, 2],
+  include_legendary: true,
+  include_mythical: true,
+  types: [],
+  bst_min: 0,
+  bst_max: 999,
+  custom_exclusions: [],
+  custom_inclusions: [],
+}
+
+// Pokemon type colors
+export const TYPE_COLORS: Record<string, string> = {
+  normal: '#A8A878',
+  fire: '#F08030',
+  water: '#6890F0',
+  electric: '#F8D030',
+  grass: '#78C850',
+  ice: '#98D8D8',
+  fighting: '#C03028',
+  poison: '#A040A0',
+  ground: '#E0C068',
+  flying: '#A890F0',
+  psychic: '#F85888',
+  bug: '#A8B820',
+  rock: '#B8A038',
+  ghost: '#705898',
+  dragon: '#7038F8',
+  dark: '#705848',
+  steel: '#B8B8D0',
+  fairy: '#EE99AC',
+}
+
 // Match types
+export type ScheduleFormat = 'round_robin' | 'double_round_robin' | 'single_elimination' | 'double_elimination'
+
 export interface Match {
   id: string
   season_id: string
   week: number
-  team_a_id: string
-  team_b_id: string
+  team_a_id?: string
+  team_b_id?: string
   team_a_name?: string
   team_b_name?: string
   scheduled_at?: string
@@ -174,6 +256,38 @@ export interface Match {
   notes?: string
   recorded_at?: string
   created_at: string
+  // Bracket-specific fields
+  schedule_format?: ScheduleFormat
+  bracket_round?: number
+  bracket_position?: number
+  next_match_id?: string
+  loser_next_match_id?: string
+  seed_a?: number
+  seed_b?: number
+  is_bye: boolean
+  is_bracket_reset: boolean
+  round_name?: string
+}
+
+export interface BracketState {
+  season_id: string
+  format: 'single_elimination' | 'double_elimination'
+  team_count: number
+  total_rounds: number
+  winners_bracket: Match[][] // [round][matches in round]
+  losers_bracket?: Match[][] // For double elim
+  grand_finals?: Match[] // For double elim (may have 2 matches)
+  champion_id?: string
+  champion_name?: string
+}
+
+export type SeedingMode = 'standings' | 'manual' | 'random'
+
+export interface GenerateScheduleParams {
+  format: ScheduleFormat
+  use_standings_seeding?: boolean
+  manual_seeds?: string[] // Team IDs in seed order
+  include_bracket_reset?: boolean
 }
 
 export interface Standings {
@@ -219,6 +333,7 @@ export type WebSocketEvent =
   | { event: 'timer_tick'; data: { seconds_remaining: number } }
   | { event: 'bid_update'; data: { pokemon_id: number; bidder_id: string; amount: number } }
   | { event: 'draft_complete'; data: { final_teams: DraftTeam[] } }
-  | { event: 'user_joined'; data: { user_id: string; display_name: string } }
-  | { event: 'user_left'; data: { user_id: string } }
+  | { event: 'draft_started'; data: { status: string; pick_order: string[]; current_team_id: string; current_team_name: string; timer_end?: string } }
+  | { event: 'user_joined'; data: { team_id: string; display_name: string } }
+  | { event: 'user_left'; data: { team_id: string; display_name: string } }
   | { event: 'error'; data: { message: string; code: string } }

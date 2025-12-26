@@ -1,3 +1,5 @@
+import random
+from collections import defaultdict
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from uuid import UUID
 from datetime import datetime
@@ -8,27 +10,45 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.schemas.match import Match, MatchResult, Standings, TeamStanding, ScheduleGenerateRequest
+from app.schemas.match import Match, MatchResult, Standings, TeamStanding, ScheduleGenerateRequest, BracketState
 from app.models.match import Match as MatchModel
 from app.models.team import Team as TeamModel
 from app.models.season import Season as SeasonModel
 from app.models.league import League as LeagueModel
 from app.models.user import User
+from app.services.bracket import (
+    generate_single_elimination_bracket,
+    generate_double_elimination_bracket,
+    process_bracket_progression,
+    process_bye_matches,
+    get_round_name,
+)
 
 router = APIRouter()
 
 
-async def match_to_response(match: MatchModel, db: AsyncSession) -> dict:
-    """Convert match to response dict with team names."""
-    team_a_result = await db.execute(
-        select(TeamModel).where(TeamModel.id == match.team_a_id)
-    )
-    team_a = team_a_result.scalar_one_or_none()
+def compute_total_rounds(matches: list[MatchModel]) -> int:
+    """Compute total rounds in bracket from matches."""
+    winners_rounds = [m.bracket_round for m in matches if m.bracket_round and m.bracket_round > 0]
+    return max(winners_rounds) if winners_rounds else 0
 
-    team_b_result = await db.execute(
-        select(TeamModel).where(TeamModel.id == match.team_b_id)
-    )
-    team_b = team_b_result.scalar_one_or_none()
+
+async def match_to_response(match: MatchModel, db: AsyncSession, total_rounds: int = 0) -> dict:
+    """Convert match to response dict with team names."""
+    team_a = None
+    team_b = None
+
+    if match.team_a_id:
+        team_a_result = await db.execute(
+            select(TeamModel).where(TeamModel.id == match.team_a_id)
+        )
+        team_a = team_a_result.scalar_one_or_none()
+
+    if match.team_b_id:
+        team_b_result = await db.execute(
+            select(TeamModel).where(TeamModel.id == match.team_b_id)
+        )
+        team_b = team_b_result.scalar_one_or_none()
 
     winner_name = None
     if match.winner_id:
@@ -36,6 +56,14 @@ async def match_to_response(match: MatchModel, db: AsyncSession) -> dict:
             winner_name = team_a.display_name if team_a else None
         else:
             winner_name = team_b.display_name if team_b else None
+
+    # Compute round name for bracket matches
+    round_name = None
+    if match.bracket_round is not None and total_rounds > 0:
+        is_losers = match.bracket_round < 0
+        round_name = get_round_name(match.bracket_round, total_rounds, is_losers)
+        if match.is_bracket_reset:
+            round_name = "Grand Finals Reset"
 
     return {
         "id": match.id,
@@ -53,6 +81,17 @@ async def match_to_response(match: MatchModel, db: AsyncSession) -> dict:
         "notes": match.notes,
         "recorded_at": match.recorded_at,
         "created_at": match.created_at,
+        # Bracket-specific fields
+        "schedule_format": match.schedule_format,
+        "bracket_round": match.bracket_round,
+        "bracket_position": match.bracket_position,
+        "next_match_id": match.next_match_id,
+        "loser_next_match_id": match.loser_next_match_id,
+        "seed_a": match.seed_a,
+        "seed_b": match.seed_b,
+        "is_bye": match.is_bye,
+        "is_bracket_reset": match.is_bracket_reset,
+        "round_name": round_name,
     }
 
 
@@ -137,6 +176,7 @@ async def generate_schedule(
                 week=week,
                 team_a_id=team_a,
                 team_b_id=team_b,
+                schedule_format='round_robin',
             )
             db.add(match)
             matches.append(match)
@@ -155,6 +195,7 @@ async def generate_schedule(
                 week=week,
                 team_a_id=team_a,
                 team_b_id=team_b,
+                schedule_format='double_round_robin',
             )
             db.add(match)
             matches.append(match)
@@ -168,19 +209,88 @@ async def generate_schedule(
                 week=week,
                 team_a_id=team_b,
                 team_b_id=team_a,
+                schedule_format='double_round_robin',
             )
             db.add(match)
             matches.append(match)
+
+    elif request.format == "single_elimination":
+        # Get seeding
+        if request.manual_seeds:
+            seeds = request.manual_seeds
+        elif request.use_standings_seeding:
+            # Get standings to determine seeding
+            standings = []
+            for team in teams:
+                standings.append({
+                    'team_id': team.id,
+                    'points': (team.wins * 3) + (team.ties * 1),
+                    'wins': team.wins,
+                    'ties': team.ties,
+                })
+            standings.sort(key=lambda x: (x['points'], x['wins'], x['ties']), reverse=True)
+            seeds = [s['team_id'] for s in standings]
+        else:
+            # Random seeding
+            seeds = list(team_ids)
+            random.shuffle(seeds)
+
+        matches = generate_single_elimination_bracket(season_id, team_ids, seeds)
+
+        # Add all matches to session
+        for match in matches:
+            db.add(match)
+
+        await db.flush()
+
+        # Process bye matches
+        bye_results = process_bye_matches(matches)
+        for bye_match, winner_id in bye_results:
+            await process_bracket_progression(bye_match, winner_id, None, db)
+
+    elif request.format == "double_elimination":
+        # Get seeding
+        if request.manual_seeds:
+            seeds = request.manual_seeds
+        elif request.use_standings_seeding:
+            standings = []
+            for team in teams:
+                standings.append({
+                    'team_id': team.id,
+                    'points': (team.wins * 3) + (team.ties * 1),
+                    'wins': team.wins,
+                    'ties': team.ties,
+                })
+            standings.sort(key=lambda x: (x['points'], x['wins'], x['ties']), reverse=True)
+            seeds = [s['team_id'] for s in standings]
+        else:
+            seeds = list(team_ids)
+            random.shuffle(seeds)
+
+        matches = generate_double_elimination_bracket(
+            season_id, team_ids, seeds, request.include_bracket_reset
+        )
+
+        for match in matches:
+            db.add(match)
+
+        await db.flush()
+
+        # Process bye matches
+        bye_results = process_bye_matches(matches)
+        for bye_match, winner_id in bye_results:
+            await process_bracket_progression(bye_match, winner_id, None, db)
 
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported format: {request.format}")
 
     await db.commit()
 
+    total_rounds = compute_total_rounds(matches)
     response = []
     for match in matches:
         await db.refresh(match)
-        match_data = await match_to_response(match, db)
+        match_data = await match_to_response(match, db, total_rounds)
         response.append(match_data)
 
     return response
@@ -223,6 +333,100 @@ async def get_standings(
     )
 
 
+@router.get("/bracket", response_model=BracketState)
+async def get_bracket(
+    season_id: UUID = Query(..., description="Season to get bracket for"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get the bracket state for visual rendering."""
+    result = await db.execute(
+        select(MatchModel).where(MatchModel.season_id == season_id)
+        .order_by(MatchModel.bracket_round, MatchModel.bracket_position)
+    )
+    matches = result.scalars().all()
+
+    if not matches:
+        raise HTTPException(status_code=404, detail="No schedule found for this season")
+
+    # Check if it's a bracket format
+    first_match = matches[0]
+    if first_match.schedule_format not in ['single_elimination', 'double_elimination']:
+        raise HTTPException(status_code=400, detail="Season does not use bracket format")
+
+    format_type = first_match.schedule_format
+    total_rounds = compute_total_rounds(matches)
+
+    # Group matches by round
+    winners_bracket: dict[int, list] = defaultdict(list)
+    losers_bracket: dict[int, list] = defaultdict(list)
+    grand_finals: list = []
+
+    # Get unique teams
+    team_ids = set()
+    for match in matches:
+        if match.team_a_id:
+            team_ids.add(match.team_a_id)
+        if match.team_b_id:
+            team_ids.add(match.team_b_id)
+
+    for match in matches:
+        match_data = await match_to_response(match, db, total_rounds)
+
+        if match.bracket_round == 0:
+            grand_finals.append(match_data)
+        elif match.bracket_round is not None and match.bracket_round < 0:
+            losers_bracket[abs(match.bracket_round)].append(match_data)
+        elif match.bracket_round is not None and match.bracket_round > 0:
+            winners_bracket[match.bracket_round].append(match_data)
+
+    # Sort by position within each round
+    for round_matches in winners_bracket.values():
+        round_matches.sort(key=lambda m: m.get('bracket_position', 0))
+    for round_matches in losers_bracket.values():
+        round_matches.sort(key=lambda m: m.get('bracket_position', 0))
+
+    # Determine champion
+    champion_id = None
+    champion_name = None
+    if grand_finals:
+        # For double elim, check bracket reset first
+        reset_match = next((m for m in grand_finals if m.get('is_bracket_reset')), None)
+        regular_gf = next((m for m in grand_finals if not m.get('is_bracket_reset')), None)
+
+        if reset_match and reset_match.get('winner_id'):
+            champion_id = reset_match.get('winner_id')
+            champion_name = reset_match.get('winner_name')
+        elif regular_gf and regular_gf.get('winner_id'):
+            # Check if winners bracket champion won (no reset needed)
+            if regular_gf.get('winner_id') == regular_gf.get('team_a_id'):
+                champion_id = regular_gf.get('winner_id')
+                champion_name = regular_gf.get('winner_name')
+            elif reset_match is None:
+                # Single elim or no reset match exists
+                champion_id = regular_gf.get('winner_id')
+                champion_name = regular_gf.get('winner_name')
+    else:
+        # Single elim: check finals
+        if total_rounds in winners_bracket:
+            finals = winners_bracket[total_rounds]
+            if finals and finals[0].get('winner_id'):
+                champion_id = finals[0].get('winner_id')
+                champion_name = finals[0].get('winner_name')
+
+    return BracketState(
+        season_id=season_id,
+        format=format_type,
+        team_count=len(team_ids),
+        total_rounds=total_rounds,
+        winners_bracket=[winners_bracket[r] for r in sorted(winners_bracket.keys())],
+        losers_bracket=[losers_bracket[r] for r in sorted(losers_bracket.keys())] if losers_bracket else None,
+        grand_finals=grand_finals if grand_finals else None,
+        champion_id=champion_id,
+        champion_name=champion_name,
+    )
+
+
 @router.get("/{match_id}", response_model=Match)
 async def get_match(
     match_id: UUID,
@@ -257,12 +461,20 @@ async def record_result(
     if not match:
         raise HTTPException(status_code=404, detail="Match not found")
 
+    # Validate teams are set
+    if not match.team_a_id or not match.team_b_id:
+        raise HTTPException(status_code=400, detail="Cannot record result for match with pending teams")
+
     # Validate winner is one of the teams
     if result.winner_id and result.winner_id not in [match.team_a_id, match.team_b_id]:
         raise HTTPException(status_code=400, detail="Winner must be one of the match teams")
 
     if result.is_tie and result.winner_id:
         raise HTTPException(status_code=400, detail="Cannot have both a tie and a winner")
+
+    # Bracket matches don't allow ties
+    if result.is_tie and match.schedule_format in ['single_elimination', 'double_elimination']:
+        raise HTTPException(status_code=400, detail="Bracket matches cannot end in a tie")
 
     # Update match
     match.winner_id = result.winner_id
@@ -293,7 +505,19 @@ async def record_result(
             team_b.wins += 1
             team_a.losses += 1
 
+    # Process bracket progression if this is a bracket match
+    if match.schedule_format in ['single_elimination', 'double_elimination'] and result.winner_id:
+        loser_id = match.team_b_id if result.winner_id == match.team_a_id else match.team_a_id
+        await process_bracket_progression(match, result.winner_id, loser_id, db)
+
     await db.commit()
     await db.refresh(match)
 
-    return await match_to_response(match, db)
+    # Get total rounds for round name computation
+    all_matches_result = await db.execute(
+        select(MatchModel).where(MatchModel.season_id == match.season_id)
+    )
+    all_matches = all_matches_result.scalars().all()
+    total_rounds = compute_total_rounds(all_matches)
+
+    return await match_to_response(match, db, total_rounds)

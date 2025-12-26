@@ -46,6 +46,7 @@ async def create_league(
         settings=league.settings.model_dump(),
     )
     db.add(db_league)
+    await db.flush()  # Flush to get the league ID
 
     # Add owner as first member
     membership = LeagueMembership(

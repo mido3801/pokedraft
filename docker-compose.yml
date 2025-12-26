@@ -13,7 +13,6 @@ services:
       - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-prod}
     volumes:
       - ./backend:/app
-      - ./pokeapi/data/v2/sprites/sprites/pokemon:/app/sprites:ro
       - ./pokeapi/data/v2/csv:/app/pokeapi_data/csv:ro
     depends_on:
       db:

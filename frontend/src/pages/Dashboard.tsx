@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
+import { leagueService } from '../services/league'
 import {
   Play,
   Trophy,
@@ -9,10 +11,18 @@ import {
   ArrowRight,
   Plus,
   Sparkles,
+  Globe,
+  Lock,
+  Calendar,
 } from 'lucide-react'
 
 export default function Dashboard() {
   const { user } = useAuth()
+
+  const { data: leagues, isLoading: leaguesLoading } = useQuery({
+    queryKey: ['leagues'],
+    queryFn: leagueService.getLeagues,
+  })
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -140,33 +150,81 @@ export default function Dashboard() {
               </Link>
             </div>
 
-            <div className="text-center py-12 bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl border-2 border-dashed border-gray-200">
-              <div className="w-20 h-20 bg-white rounded-2xl shadow-sm flex items-center justify-center mx-auto mb-4">
-                <Trophy className="w-10 h-10 text-gray-400" />
+            {leaguesLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="loader w-8 h-8"></div>
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                No leagues yet
-              </h3>
-              <p className="text-gray-500 mb-6 max-w-md mx-auto">
-                Join an existing league or create your own to start competing with friends.
-              </p>
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                <Link
-                  to="/leagues/public"
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-gray-200 rounded-xl font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-colors"
-                >
-                  <Users className="w-4 h-4" />
-                  Browse Public Leagues
-                </Link>
-                <Link
-                  to="/leagues/create"
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-pokemon-red text-white rounded-xl font-medium hover:bg-red-600 shadow-sm hover:shadow-md transition-all"
-                >
-                  <Plus className="w-4 h-4" />
-                  Create a League
-                </Link>
+            ) : leagues && leagues.length > 0 ? (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {leagues.slice(0, 3).map((league) => (
+                  <Link
+                    key={league.id}
+                    to={`/leagues/${league.id}`}
+                    className="group p-4 rounded-xl border border-gray-200 hover:border-pokemon-red/30 hover:shadow-md transition-all"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <h3 className="font-semibold text-gray-900 group-hover:text-pokemon-red transition-colors">
+                        {league.name}
+                      </h3>
+                      {league.is_public ? (
+                        <Globe className="w-4 h-4 text-green-500" />
+                      ) : (
+                        <Lock className="w-4 h-4 text-gray-400" />
+                      )}
+                    </div>
+                    {league.description && (
+                      <p className="text-sm text-gray-500 mb-3 line-clamp-2">{league.description}</p>
+                    )}
+                    <div className="flex items-center gap-4 text-xs text-gray-500">
+                      <span className="flex items-center gap-1">
+                        <Users className="w-3 h-3" />
+                        {league.member_count || 1}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        Season {league.current_season || 1}
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+                {leagues.length > 3 && (
+                  <Link
+                    to="/leagues"
+                    className="flex items-center justify-center p-4 rounded-xl border-2 border-dashed border-gray-200 hover:border-gray-300 text-gray-500 hover:text-gray-700 transition-colors"
+                  >
+                    <span className="font-medium">+{leagues.length - 3} more</span>
+                  </Link>
+                )}
               </div>
-            </div>
+            ) : (
+              <div className="text-center py-12 bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl border-2 border-dashed border-gray-200">
+                <div className="w-20 h-20 bg-white rounded-2xl shadow-sm flex items-center justify-center mx-auto mb-4">
+                  <Trophy className="w-10 h-10 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  No leagues yet
+                </h3>
+                <p className="text-gray-500 mb-6 max-w-md mx-auto">
+                  Join an existing league or create your own to start competing with friends.
+                </p>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                  <Link
+                    to="/leagues/public"
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-white border border-gray-200 rounded-xl font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-colors"
+                  >
+                    <Users className="w-4 h-4" />
+                    Browse Public Leagues
+                  </Link>
+                  <Link
+                    to="/leagues"
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-pokemon-red text-white rounded-xl font-medium hover:bg-red-600 shadow-sm hover:shadow-md transition-all"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Create a League
+                  </Link>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

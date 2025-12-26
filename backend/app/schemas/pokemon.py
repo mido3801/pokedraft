@@ -20,10 +20,33 @@ class Pokemon(PokemonBase):
     """Full Pokemon data."""
 
     stats: Dict[str, int]
+    bst: Optional[int] = None
     abilities: List[str]
     generation: Optional[int] = None
     is_legendary: bool = False
     is_mythical: bool = False
+    evolution_stage: Optional[int] = None  # 0=unevolved, 1=middle, 2=fully evolved
+
+
+class PokemonBoxEntry(BaseModel):
+    """Pokemon data optimized for box display."""
+
+    id: int
+    name: str
+    sprite: str
+    types: List[str]
+    generation: Optional[int] = None
+    bst: int
+    evolution_stage: int  # 0=unevolved, 1=middle, 2=fully evolved
+    is_legendary: bool = False
+    is_mythical: bool = False
+
+
+class PokemonBoxResponse(BaseModel):
+    """Response containing all Pokemon for box display."""
+
+    pokemon: List[PokemonBoxEntry]
+    total: int
 
 
 class PokemonSummary(BaseModel):

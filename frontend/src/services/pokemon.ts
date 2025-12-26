@@ -1,5 +1,5 @@
 import { api } from './api'
-import { Pokemon } from '../types'
+import { Pokemon, PokemonBoxResponse } from '../types'
 import { SpriteStyle } from '../context/SpriteContext'
 
 interface PokemonListResponse {
@@ -74,5 +74,9 @@ export const pokemonService = {
 
   async getPokemonSprites(id: number): Promise<SpriteUrls> {
     return api.get<SpriteUrls>(`/pokemon/${id}/sprites`)
+  },
+
+  async getAllForBox(spriteStyle: SpriteStyle = 'default'): Promise<PokemonBoxResponse> {
+    return api.get<PokemonBoxResponse>(`/pokemon/box?sprite_style=${spriteStyle}`)
   },
 }

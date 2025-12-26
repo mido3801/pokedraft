@@ -1,8 +1,5 @@
-from pathlib import Path
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.router import api_router
 from app.core.config import settings
@@ -35,13 +32,3 @@ app.include_router(ws_router)
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy"}
-
-
-# Mount static sprites directory if it exists
-sprite_dir = Path(settings.SPRITE_DIR)
-if sprite_dir.exists():
-    app.mount(
-        settings.SPRITE_BASE_URL,
-        StaticFiles(directory=str(sprite_dir)),
-        name="sprites"
-    )
