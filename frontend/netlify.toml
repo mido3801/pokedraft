@@ -7,6 +7,13 @@
 [build.environment]
   NODE_VERSION = "20"
 
+# Proxy API requests to Fly.io backend
+[[redirects]]
+  from = "/api/*"
+  to = "https://pokedraft-api.fly.dev/api/:splat"
+  status = 200
+  force = true
+
 # SPA redirect - all routes go to index.html for React Router
 [[redirects]]
   from = "/*"
