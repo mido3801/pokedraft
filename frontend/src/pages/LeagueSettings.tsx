@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, useEffect } from 'react'
 import { leagueService } from '../services/league'
 import { useAuth } from '../context/AuthContext'
-import { DraftFormat, LeagueSettings as LeagueSettingsType } from '../types'
+import { DraftFormat } from '../types'
 
 export default function LeagueSettings() {
   const { leagueId } = useParams<{ leagueId: string }>()
