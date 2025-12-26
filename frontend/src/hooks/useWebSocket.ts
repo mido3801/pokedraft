@@ -77,8 +77,8 @@ export function useWebSocket({
       wsRef.current.close()
     }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//${window.location.host}/ws/draft/${draftId}`
+    const wsBaseUrl = (import.meta.env.VITE_WS_URL || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`).replace(/\/$/, '')
+    const wsUrl = `${wsBaseUrl}/ws/draft/${draftId}`
 
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
