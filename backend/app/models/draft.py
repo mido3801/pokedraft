@@ -41,6 +41,10 @@ class Draft(Base):
     # For anonymous drafts without a season
     session_token: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, unique=True)
     rejoin_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, unique=True)
+    # Creator user_id for tracking user's drafts (even anonymous ones)
+    creator_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
 
     format: Mapped[DraftFormat] = mapped_column(Enum(DraftFormat), default=DraftFormat.SNAKE)
     timer_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=90)
@@ -64,6 +68,7 @@ class Draft(Base):
     # Relationships
     season = relationship("Season", back_populates="draft")
     picks = relationship("DraftPick", back_populates="draft")
+    creator = relationship("User", back_populates="created_drafts")
 
 
 class DraftPick(Base):

@@ -20,7 +20,6 @@ class League(Base):
     name: Mapped[str] = mapped_column(String(100))
     owner_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     invite_code: Mapped[str] = mapped_column(String(20), unique=True, index=True)
-    is_public: Mapped[bool] = mapped_column(Boolean, default=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     settings: Mapped[dict] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

@@ -4,6 +4,7 @@ import { SpriteProvider } from './context/SpriteContext'
 import Layout from './components/Layout'
 import Home from './pages/Home'
 import Login from './pages/Login'
+import AuthCallback from './pages/AuthCallback'
 import Dashboard from './pages/Dashboard'
 import LeagueList from './pages/LeagueList'
 import LeagueDetail from './pages/LeagueDetail'
@@ -23,6 +24,7 @@ function App() {
           <Route path="/" element={<Layout />}>
             <Route index element={<Home />} />
             <Route path="login" element={<Login />} />
+            <Route path="auth/callback" element={<AuthCallback />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="leagues" element={<LeagueList />} />
             <Route path="leagues/:leagueId" element={<LeagueDetail />} />

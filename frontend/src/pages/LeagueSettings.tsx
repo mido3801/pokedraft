@@ -15,7 +15,6 @@ export default function LeagueSettings() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    is_public: false,
     settings: {
       draft_format: 'snake' as DraftFormat,
       roster_size: 6,
@@ -39,7 +38,6 @@ export default function LeagueSettings() {
       setFormData({
         name: league.name,
         description: league.description || '',
-        is_public: league.is_public,
         settings: {
           draft_format: league.settings.draft_format,
           roster_size: league.settings.roster_size,
@@ -148,19 +146,6 @@ export default function LeagueSettings() {
                 className="input"
                 rows={3}
               />
-            </div>
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="isPublic"
-                checked={formData.is_public}
-                onChange={(e) => setFormData({ ...formData, is_public: e.target.checked })}
-                className="h-4 w-4 text-pokemon-red rounded border-gray-300"
-              />
-              <label htmlFor="isPublic" className="ml-2 text-sm text-gray-700">
-                Public league (anyone can view and request to join)
-              </label>
             </div>
           </div>
         </div>

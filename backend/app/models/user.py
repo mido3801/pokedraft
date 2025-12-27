@@ -32,3 +32,5 @@ class User(Base):
     owned_leagues = relationship("League", back_populates="owner")
     memberships = relationship("LeagueMembership", back_populates="user")
     teams = relationship("Team", back_populates="user")
+    created_drafts = relationship("Draft", back_populates="creator")
+    pool_presets = relationship("PoolPreset", back_populates="user")

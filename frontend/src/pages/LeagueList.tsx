@@ -9,8 +9,6 @@ import {
   Plus,
   Users,
   Calendar,
-  Globe,
-  Lock,
   ArrowRight,
   X,
   Settings,
@@ -26,7 +24,6 @@ import {
 interface CreateLeagueForm {
   name: string
   description: string
-  isPublic: boolean
   settings: {
     draft_format: DraftFormat
     roster_size: number
@@ -40,7 +37,6 @@ interface CreateLeagueForm {
 const initialFormState: CreateLeagueForm = {
   name: '',
   description: '',
-  isPublic: false,
   settings: {
     draft_format: 'snake',
     roster_size: 6,
@@ -70,7 +66,6 @@ export default function LeagueList() {
       leagueService.createLeague({
         name: form.name,
         description: form.description || undefined,
-        is_public: form.isPublic,
         settings: form.settings,
       }),
     onSuccess: (league) => {
@@ -148,22 +143,13 @@ export default function LeagueList() {
             <p className="text-gray-500 mb-8 max-w-md mx-auto text-lg">
               Create your first league to start organizing draft competitions with friends.
             </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-pokemon-red to-red-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl hover:scale-105 transition-all"
-              >
-                <Plus className="w-5 h-5" />
-                Create Your First League
-              </button>
-              <Link
-                to="/leagues/public"
-                className="inline-flex items-center gap-2 px-6 py-4 bg-white border-2 border-gray-200 text-gray-700 rounded-xl font-semibold hover:border-gray-300 hover:bg-gray-50 transition-all"
-              >
-                <Globe className="w-5 h-5" />
-                Browse Public Leagues
-              </Link>
-            </div>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-pokemon-red to-red-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl hover:scale-105 transition-all"
+            >
+              <Plus className="w-5 h-5" />
+              Create Your First League
+            </button>
           </div>
         )}
       </div>
@@ -272,40 +258,6 @@ export default function LeagueList() {
                       rows={2}
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-pokemon-blue focus:border-transparent transition-all resize-none"
                     />
-                  </div>
-
-                  {/* Visibility Toggle */}
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                    <div className="flex items-center gap-3">
-                      {form.isPublic ? (
-                        <Globe className="w-5 h-5 text-green-600" />
-                      ) : (
-                        <Lock className="w-5 h-5 text-gray-500" />
-                      )}
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {form.isPublic ? 'Public League' : 'Private League'}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {form.isPublic
-                            ? 'Anyone can discover and join'
-                            : 'Invite code required to join'}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setForm({ ...form, isPublic: !form.isPublic })}
-                      className={`relative w-12 h-6 rounded-full transition-colors ${
-                        form.isPublic ? 'bg-green-500' : 'bg-gray-300'
-                      }`}
-                    >
-                      <span
-                        className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                          form.isPublic ? 'translate-x-7' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
                   </div>
                 </div>
 
@@ -533,22 +485,9 @@ function LeagueCard({ league, index }: { league: League; index: number }) {
             <div className={`w-12 h-12 bg-gradient-to-br ${gradient} rounded-xl flex items-center justify-center`}>
               <Trophy className={`w-6 h-6 ${iconColor}`} />
             </div>
-            <div>
-              <h3 className="text-lg font-bold text-gray-900 group-hover:text-pokemon-red transition-colors">
-                {league.name}
-              </h3>
-              {league.is_public ? (
-                <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700">
-                  <Globe className="w-3 h-3" />
-                  Public
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500">
-                  <Lock className="w-3 h-3" />
-                  Private
-                </span>
-              )}
-            </div>
+            <h3 className="text-lg font-bold text-gray-900 group-hover:text-pokemon-red transition-colors">
+              {league.name}
+            </h3>
           </div>
           <ArrowRight className="w-5 h-5 text-gray-400 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
         </div>

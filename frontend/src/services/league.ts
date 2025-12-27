@@ -3,7 +3,6 @@ import { League, Season } from '../types'
 
 interface CreateLeagueParams {
   name: string
-  is_public?: boolean
   description?: string
   settings?: {
     draft_format?: string
@@ -23,10 +22,6 @@ export const leagueService = {
 
   async getLeagues(): Promise<League[]> {
     return api.get<League[]>('/leagues')
-  },
-
-  async getPublicLeagues(skip = 0, limit = 20): Promise<League[]> {
-    return api.get<League[]>(`/leagues/public?skip=${skip}&limit=${limit}`)
   },
 
   async getLeague(leagueId: string): Promise<League> {

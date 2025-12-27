@@ -40,7 +40,6 @@ async def create_league(
         name=league.name,
         owner_id=current_user.id,
         invite_code=generate_invite_code(),
-        is_public=league.is_public,
         description=league.description,
         settings=league.settings.model_dump(),
     )
@@ -77,24 +76,6 @@ async def list_user_leagues(
     return [await build_league_response(league, db) for league in leagues]
 
 
-@router.get("/public", response_model=list[League])
-async def list_public_leagues(
-    skip: int = 0,
-    limit: int = 20,
-    db: AsyncSession = Depends(get_db),
-):
-    """List public leagues available to join."""
-    result = await db.execute(
-        select(LeagueModel)
-        .where(LeagueModel.is_public == True)
-        .offset(skip)
-        .limit(limit)
-    )
-    leagues = result.scalars().all()
-
-    return [await build_league_response(league, db) for league in leagues]
-
-
 @router.get("/{league_id}", response_model=League)
 async def get_league(
     league_id: UUID,
@@ -104,9 +85,9 @@ async def get_league(
     """Get league details."""
     league = await fetch_league(league_id, db)
 
-    # Check if user is a member or league is public
+    # Check if user is a member
     is_member = await check_league_membership(league_id, current_user, db)
-    if not is_member and not league.is_public:
+    if not is_member:
         raise not_league_member()
 
     return await build_league_response(league, db)
@@ -127,8 +108,6 @@ async def update_league(
 
     if update.name is not None:
         league.name = update.name
-    if update.is_public is not None:
-        league.is_public = update.is_public
     if update.description is not None:
         league.description = update.description
     if update.settings is not None:
@@ -166,10 +145,9 @@ async def join_league(
             existing.is_active = True
             await db.commit()
     else:
-        # Validate invite code for private leagues
-        if not league.is_public:
-            if not invite_code or invite_code != league.invite_code:
-                raise forbidden("Invalid invite code")
+        # Validate invite code
+        if not invite_code or invite_code != league.invite_code:
+            raise forbidden("Invalid invite code")
 
         # Create membership
         membership = LeagueMembership(

@@ -1,5 +1,5 @@
 import { api } from './api'
-import { Draft, DraftState, PokemonFilters } from '../types'
+import { Draft, DraftState, DraftSummary, PokemonFilters } from '../types'
 
 export interface CreateDraftParams {
   format: string
@@ -66,5 +66,13 @@ export const draftService = {
 
   async getMyTeam(draftId: string): Promise<{ team_id: string; display_name: string }> {
     return api.get(`/drafts/${draftId}/my-team`)
+  },
+
+  async getMyDrafts(): Promise<DraftSummary[]> {
+    return api.get<DraftSummary[]>('/drafts/me')
+  },
+
+  async deleteDraft(draftId: string): Promise<void> {
+    await api.delete(`/drafts/${draftId}`)
   },
 }

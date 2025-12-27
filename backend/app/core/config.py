@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     # Draft settings
     DEFAULT_TIMER_SECONDS: int = 90
     ANONYMOUS_SESSION_EXPIRE_DAYS: int = 7
+    DRAFT_EXPIRE_HOURS: int = 24  # Pending drafts expire after 24 hours
+    MAX_PENDING_ANONYMOUS_DRAFTS: int = 3  # Max pending non-league drafts per user
 
     # Sprite settings (using PokeAPI CDN)
     SPRITE_BASE_URL: str = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon"

@@ -20,7 +20,6 @@ class LeagueBase(BaseModel):
     """Base league schema."""
 
     name: str = Field(..., min_length=1, max_length=100)
-    is_public: bool = False
     description: Optional[str] = None
 
 
@@ -35,7 +34,6 @@ class LeagueUpdate(BaseModel):
     """Schema for updating a league."""
 
     name: Optional[str] = Field(None, min_length=1, max_length=100)
-    is_public: Optional[bool] = None
     description: Optional[str] = None
     settings: Optional[LeagueSettings] = None
 

@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import auth, leagues, drafts, teams, trades, matches, templates, seasons, pokemon
+from app.api.v1.endpoints import auth, leagues, drafts, teams, trades, matches, templates, seasons, pokemon, presets
 
 api_router = APIRouter()
 
@@ -13,3 +13,4 @@ api_router.include_router(trades.router, prefix="/trades", tags=["Trades"])
 api_router.include_router(matches.router, prefix="/matches", tags=["Matches"])
 api_router.include_router(templates.router, prefix="/templates", tags=["Templates"])
 api_router.include_router(pokemon.router, prefix="/pokemon", tags=["Pokemon"])
+api_router.include_router(presets.router, prefix="/presets", tags=["Presets"])

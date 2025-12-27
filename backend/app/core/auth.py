@@ -113,7 +113,7 @@ async def require_league_member(
     league = await get_league(league_id, db)
 
     is_member = await check_league_membership(league_id, current_user, db)
-    if not is_member and not league.is_public:
+    if not is_member:
         raise not_league_member()
 
     return league
@@ -181,7 +181,7 @@ async def require_season_league_member(
         raise league_not_found(season.league_id)
 
     is_member = await check_league_membership(league.id, current_user, db)
-    if not is_member and not league.is_public:
+    if not is_member:
         raise not_league_member()
 
     return season, league

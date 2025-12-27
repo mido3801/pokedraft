@@ -16,6 +16,13 @@ export const queryKeys = {
   seasonSchedule: (seasonId: string) => ['season-schedule', seasonId] as const,
   seasonBracket: (seasonId: string) => ['season-bracket', seasonId] as const,
   seasonTrades: (seasonId: string) => ['season-trades', seasonId] as const,
+
+  // Drafts
+  myDrafts: ['my-drafts'] as const,
+
+  // Presets
+  presets: ['presets'] as const,
+  preset: (presetId: string) => ['preset', presetId] as const,
 } as const
 
 // Type helper for query key values

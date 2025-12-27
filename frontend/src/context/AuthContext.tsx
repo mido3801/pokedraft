@@ -1,11 +1,14 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { User } from '../types'
 import { authService } from '../services/auth'
+import { supabase } from '../lib/supabase'
 
 interface AuthContextType {
   user: User | null
   loading: boolean
-  login: () => Promise<void>
+  signInWithEmail: (email: string) => Promise<{ error: Error | null }>
+  signInWithDiscord: () => Promise<{ error: Error | null }>
+  linkDiscord: () => Promise<{ error: Error | null }>
   devLogin: (userNumber?: number) => Promise<void>
   logout: () => Promise<void>
   isAuthenticated: boolean
@@ -18,24 +21,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Check for existing session
-    const checkSession = async () => {
+    // Check for existing Supabase session on mount
+    const initAuth = async () => {
       try {
-        const currentUser = await authService.getCurrentUser()
-        setUser(currentUser)
+        const session = await authService.getSession()
+        if (session?.access_token) {
+          authService.syncSession(session.access_token)
+          const currentUser = await authService.getCurrentUser()
+          setUser(currentUser)
+        }
       } catch (error) {
-        console.error('Session check failed:', error)
+        console.error('Auth initialization failed:', error)
       } finally {
         setLoading(false)
       }
     }
 
-    checkSession()
+    initAuth()
+
+    // Subscribe to Supabase auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_IN' && session?.access_token) {
+          authService.syncSession(session.access_token)
+          const currentUser = await authService.getCurrentUser()
+          setUser(currentUser)
+        } else if (event === 'SIGNED_OUT') {
+          authService.syncSession(null)
+          setUser(null)
+        } else if (event === 'TOKEN_REFRESHED' && session?.access_token) {
+          authService.syncSession(session.access_token)
+        }
+      }
+    )
+
+    return () => {
+      subscription.unsubscribe()
+    }
   }, [])
 
-  const login = async () => {
-    // Redirect to OAuth flow
-    await authService.login()
+  const signInWithEmail = async (email: string) => {
+    return authService.signInWithEmail(email)
+  }
+
+  const signInWithDiscord = async () => {
+    return authService.signInWithDiscord()
+  }
+
+  const linkDiscord = async () => {
+    return authService.linkDiscord()
   }
 
   const devLogin = async (userNumber: number = 1) => {
@@ -58,7 +92,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         loading,
-        login,
+        signInWithEmail,
+        signInWithDiscord,
+        linkDiscord,
         devLogin,
         logout,
         isAuthenticated: !!user,

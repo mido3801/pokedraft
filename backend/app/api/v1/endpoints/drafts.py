@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, status, Query
 from uuid import UUID
 from datetime import datetime, timedelta
 from typing import Optional
-from sqlalchemy import select
+from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -31,6 +31,7 @@ from app.schemas.draft import (
     AnonymousDraftResponse,
     PokemonPoolEntry,
     PokemonFilters,
+    DraftSummary,
 )
 from app.schemas.team import ShowdownExport
 from app.models.draft import Draft as DraftModel, DraftPick, DraftStatus
@@ -70,6 +71,19 @@ async def create_draft(
     if not league or league.owner_id != current_user.id:
         raise not_league_owner()
 
+    # Check if user already has a pending (non-expired) draft for this league
+    now = datetime.utcnow()
+    pending_league_draft = await db.execute(
+        select(DraftModel)
+        .join(SeasonModel, DraftModel.season_id == SeasonModel.id)
+        .where(SeasonModel.league_id == league.id)
+        .where(DraftModel.creator_id == current_user.id)
+        .where(DraftModel.status == DraftStatus.PENDING)
+        .where(or_(DraftModel.expires_at.is_(None), DraftModel.expires_at > now))
+    )
+    if pending_league_draft.scalar_one_or_none():
+        raise bad_request("You already have a pending draft for this league")
+
     # Build pokemon pool - load from database if not provided
     pokemon_pool = {}
     if draft.pokemon_pool:
@@ -107,6 +121,7 @@ async def create_draft(
     db_draft = DraftModel(
         id=draft_id,
         season_id=season_id,
+        creator_id=current_user.id,
         format=draft.format,
         timer_seconds=draft.timer_seconds,
         budget_enabled=draft.budget_enabled,
@@ -116,6 +131,7 @@ async def create_draft(
         nomination_timer_seconds=draft.nomination_timer_seconds,
         min_bid=draft.min_bid,
         bid_increment=draft.bid_increment,
+        expires_at=datetime.utcnow() + timedelta(hours=settings.DRAFT_EXPIRE_HOURS),
     )
     db.add(db_draft)
 
@@ -234,9 +250,27 @@ def _apply_pokemon_filters(pokemon_list: list[dict], filters: PokemonFilters) ->
 @router.post("/anonymous", response_model=AnonymousDraftResponse, status_code=status.HTTP_201_CREATED)
 async def create_anonymous_draft(
     draft: AnonymousDraftCreate,
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create an anonymous draft session (no auth required)."""
+    """Create an anonymous draft session (no auth required, but tracks creator if logged in)."""
+    # Check if authenticated user has too many pending anonymous drafts
+    if current_user:
+        now = datetime.utcnow()
+        pending_count_result = await db.execute(
+            select(func.count(DraftModel.id))
+            .where(DraftModel.creator_id == current_user.id)
+            .where(DraftModel.season_id.is_(None))  # Non-league drafts
+            .where(DraftModel.status == DraftStatus.PENDING)
+            .where(or_(DraftModel.expires_at.is_(None), DraftModel.expires_at > now))
+        )
+        pending_count = pending_count_result.scalar() or 0
+        if pending_count >= settings.MAX_PENDING_ANONYMOUS_DRAFTS:
+            raise bad_request(
+                f"You already have {settings.MAX_PENDING_ANONYMOUS_DRAFTS} pending drafts. "
+                "Start or delete an existing draft before creating a new one."
+            )
+
     session_token = generate_session_token()
     rejoin_code = generate_rejoin_code()
 
@@ -279,13 +313,14 @@ async def create_anonymous_draft(
         id=draft_id,
         session_token=session_token,
         rejoin_code=rejoin_code,
+        creator_id=current_user.id if current_user else None,
         format=draft.format,
         timer_seconds=draft.timer_seconds,
         budget_enabled=draft.budget_enabled,
         budget_per_team=draft.budget_per_team,
         roster_size=draft.roster_size,
         pokemon_pool=pokemon_pool,
-        expires_at=datetime.utcnow() + timedelta(days=settings.ANONYMOUS_SESSION_EXPIRE_DAYS),
+        expires_at=datetime.utcnow() + timedelta(hours=settings.DRAFT_EXPIRE_HOURS),
     )
     db.add(db_draft)
 
@@ -384,6 +419,51 @@ async def join_anonymous_draft(
     }
 
 
+@router.get("/me", response_model=list[DraftSummary])
+async def get_my_drafts(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all drafts created by the current user (excludes expired pending drafts)."""
+    now = datetime.utcnow()
+    # Query drafts with team count, excluding expired pending drafts
+    result = await db.execute(
+        select(
+            DraftModel,
+            func.count(TeamModel.id).label("team_count")
+        )
+        .outerjoin(TeamModel, DraftModel.id == TeamModel.draft_id)
+        .where(DraftModel.creator_id == current_user.id)
+        .where(
+            or_(
+                DraftModel.status != DraftStatus.PENDING,  # Show all non-pending
+                DraftModel.expires_at.is_(None),  # Show pending without expiration
+                DraftModel.expires_at > now  # Show pending not yet expired
+            )
+        )
+        .group_by(DraftModel.id)
+        .order_by(DraftModel.created_at.desc())
+    )
+    drafts_with_counts = result.all()
+
+    return [
+        DraftSummary(
+            id=draft.id,
+            season_id=draft.season_id,
+            rejoin_code=draft.rejoin_code,
+            format=draft.format,
+            status=draft.status,
+            roster_size=draft.roster_size,
+            team_count=team_count,
+            created_at=draft.created_at,
+            started_at=draft.started_at,
+            completed_at=draft.completed_at,
+            expires_at=draft.expires_at,
+        )
+        for draft, team_count in drafts_with_counts
+    ]
+
+
 @router.get("/{draft_id}", response_model=Draft)
 async def get_draft(
     draft_id: UUID,
@@ -400,6 +480,42 @@ async def get_draft(
         raise draft_not_found(draft_id)
 
     return draft
+
+
+@router.delete("/{draft_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_draft(
+    draft_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a pending draft. Only the creator can delete their draft."""
+    result = await db.execute(
+        select(DraftModel).where(DraftModel.id == draft_id)
+    )
+    draft = result.scalar_one_or_none()
+
+    if not draft:
+        raise draft_not_found(draft_id)
+
+    # Only the creator can delete the draft
+    if draft.creator_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only delete drafts you created",
+        )
+
+    # Can only delete pending drafts
+    if draft.status != DraftStatus.PENDING:
+        raise bad_request("Can only delete drafts that haven't started yet")
+
+    # Delete associated teams first (foreign key constraint)
+    await db.execute(
+        TeamModel.__table__.delete().where(TeamModel.draft_id == draft_id)
+    )
+
+    # Delete the draft
+    await db.delete(draft)
+    await db.commit()
 
 
 @router.get("/{draft_id}/my-team")
@@ -567,6 +683,7 @@ async def start_draft(
 
     draft.status = DraftStatus.LIVE
     draft.started_at = datetime.utcnow()
+    draft.expires_at = None  # Clear expiration once draft starts
     draft.pick_order = [str(team.id) for team in teams]
 
     await db.commit()

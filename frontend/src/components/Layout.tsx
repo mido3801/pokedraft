@@ -1,4 +1,4 @@
-import { Outlet, Link } from 'react-router-dom'
+import { Outlet, Link, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 
@@ -73,7 +73,8 @@ function DevUserSwitcher() {
 }
 
 export default function Layout() {
-  const { user, isAuthenticated, login, logout } = useAuth()
+  const { user, isAuthenticated, logout } = useAuth()
+  const navigate = useNavigate()
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -114,7 +115,7 @@ export default function Layout() {
                 </>
               ) : (
                 <button
-                  onClick={login}
+                  onClick={() => navigate('/login')}
                   className="px-4 py-2 rounded bg-white text-pokemon-red font-medium hover:bg-gray-100"
                 >
                   Sign In

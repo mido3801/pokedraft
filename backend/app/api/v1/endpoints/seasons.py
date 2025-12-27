@@ -35,13 +35,13 @@ async def get_season(
 
     season, league = row
 
-    # Check access - must be a member of the league or league must be public
+    # Check access - must be a member of the league
     if current_user:
         is_member = await check_league_membership(league.id, current_user, db)
     else:
         is_member = False
 
-    if not is_member and not league.is_public:
+    if not is_member:
         raise not_league_member()
 
     # Get team count

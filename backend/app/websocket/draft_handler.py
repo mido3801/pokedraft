@@ -2,6 +2,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from uuid import UUID
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict
+import logging
 
 from sqlalchemy import select
 
@@ -11,6 +12,8 @@ from app.websocket.draft_room import DraftRoom, DraftParticipant, DraftPick
 from app.models.draft import Draft as DraftModel, DraftPick as DraftPickModel, DraftStatus
 from app.models.team import Team as TeamModel
 from app.models.season import Season as SeasonModel, SeasonStatus
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 manager = ConnectionManager()

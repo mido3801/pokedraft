@@ -16,7 +16,6 @@ export interface League {
   name: string
   owner_id: string
   invite_code: string
-  is_public: boolean
   description?: string
   settings: LeagueSettings
   created_at: string
@@ -73,6 +72,20 @@ export interface Draft {
   nomination_timer_seconds?: number
   min_bid?: number
   bid_increment?: number
+}
+
+export interface DraftSummary {
+  id: string
+  season_id?: string
+  rejoin_code?: string
+  format: DraftFormat
+  status: DraftStatus
+  roster_size: number
+  team_count: number
+  created_at: string
+  started_at?: string
+  completed_at?: string
+  expires_at?: string
 }
 
 export interface DraftState {
@@ -356,3 +369,54 @@ export type WebSocketEvent =
   | { event: 'user_joined'; data: { team_id: string; display_name: string } }
   | { event: 'user_left'; data: { team_id: string; display_name: string } }
   | { event: 'error'; data: { message: string; code: string } }
+
+// Pool Preset types
+export interface PoolPreset {
+  id: string
+  user_id: string
+  name: string
+  description?: string
+  pokemon_pool: Record<string, PokemonPoolEntry>
+  pokemon_count: number
+  is_public: boolean
+  created_at: string
+  updated_at: string
+  creator_name?: string
+}
+
+export interface PoolPresetSummary {
+  id: string
+  user_id: string
+  name: string
+  description?: string
+  pokemon_count: number
+  is_public: boolean
+  created_at: string
+  creator_name?: string
+}
+
+export interface CreatePresetParams {
+  name: string
+  description?: string
+  pokemon_pool: Record<string, unknown>
+  is_public: boolean
+}
+
+export interface UpdatePresetParams {
+  name?: string
+  description?: string
+  pokemon_pool?: Record<string, unknown>
+  is_public?: boolean
+}
+
+// Pokemon pool entry stored in presets
+export interface PokemonPoolEntry {
+  name: string
+  points: number | null
+  types: string[]
+  generation?: number
+  bst?: number
+  evolution_stage?: number
+  is_legendary?: boolean
+  is_mythical?: boolean
+}

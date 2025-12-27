@@ -62,7 +62,6 @@ async def build_league_response(
         "name": league.name,
         "owner_id": league.owner_id,
         "invite_code": league.invite_code,
-        "is_public": league.is_public,
         "description": league.description,
         "settings": league.settings,
         "created_at": league.created_at,

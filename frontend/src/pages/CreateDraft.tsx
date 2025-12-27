@@ -1,13 +1,19 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { DraftFormat, PokemonFilters, PokemonBoxEntry, PokemonPointsMap, DEFAULT_POKEMON_FILTERS } from '../types'
 import { draftService } from '../services/draft'
 import { pokemonService } from '../services/pokemon'
+import { queryKeys } from '../services/queryKeys'
 import { storage } from '../utils/storage'
+import { useAuth } from '../context/AuthContext'
 import PokemonBox from '../components/PokemonBox'
 import PokemonFiltersComponent from '../components/PokemonFilters'
 import PointsManager from '../components/PointsManager'
+import SavePresetModal from '../components/SavePresetModal'
+import LoadPresetModal from '../components/LoadPresetModal'
 import { TEMPLATE_PRESETS, applyTemplate, getTemplateOptions } from '../data/templatePresets'
+import { Save, FolderOpen } from 'lucide-react'
 
 // Helper to check if a Pokemon passes filters
 function pokemonPassesFilters(p: PokemonBoxEntry, filters: PokemonFilters): boolean {
@@ -24,6 +30,10 @@ function pokemonPassesFilters(p: PokemonBoxEntry, filters: PokemonFilters): bool
 
 export default function CreateDraft() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
+  const [showSavePresetModal, setShowSavePresetModal] = useState(false)
+  const [showLoadPresetModal, setShowLoadPresetModal] = useState(false)
   const [formData, setFormData] = useState({
     displayName: '',
     format: 'snake' as DraftFormat,
@@ -140,6 +150,33 @@ export default function CreateDraft() {
     })
   }, [])
 
+  // Handle loading a preset
+  const handleLoadPreset = useCallback((poolData: Record<string, unknown>, points: PokemonPointsMap) => {
+    // Extract Pokemon IDs from the preset pool
+    const presetPokemonIds = Object.keys(poolData).map(id => parseInt(id))
+
+    // Set filters to include exactly these Pokemon via custom_inclusions
+    // and exclude everything else by clearing generations/stages
+    setFilters({
+      ...DEFAULT_POKEMON_FILTERS,
+      custom_inclusions: presetPokemonIds,
+      // Set restrictive filters so only custom_inclusions are used
+      generations: [],
+      evolution_stages: [],
+      include_legendary: false,
+      include_mythical: false,
+    })
+
+    // Set the point values
+    setPokemonPoints(points)
+
+    // Expand the pool section so user can see the loaded preset
+    setShowPokemonPool(true)
+
+    // Clear the template since we're using a custom preset
+    setFormData(prev => ({ ...prev, template: '' }))
+  }, [])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -212,6 +249,9 @@ export default function CreateDraft() {
         team: response.team_id,
         rejoin: response.rejoin_code,
       })
+
+      // Invalidate the drafts cache so the dashboard shows the new draft
+      queryClient.invalidateQueries({ queryKey: queryKeys.myDrafts })
 
       setCreatedDraft({
         draftId: response.id,
@@ -550,6 +590,28 @@ export default function CreateDraft() {
             )}
           </div>
 
+          {/* Preset buttons - only shown when logged in */}
+          {user && (
+            <div className="flex gap-2 mb-4">
+              <button
+                type="button"
+                onClick={() => setShowLoadPresetModal(true)}
+                className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <FolderOpen className="w-4 h-4" />
+                Load Preset
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowSavePresetModal(true)}
+                className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <Save className="w-4 h-4" />
+                Save as Preset
+              </button>
+            </div>
+          )}
+
           {/* Toggle to show/hide Pokemon pool customization */}
           <button
             type="button"
@@ -611,6 +673,24 @@ export default function CreateDraft() {
           )}
         </button>
       </form>
+
+      {/* Preset Modals - only rendered when logged in */}
+      {user && (
+        <>
+          <SavePresetModal
+            isOpen={showSavePresetModal}
+            onClose={() => setShowSavePresetModal(false)}
+            pokemon={allPokemon}
+            filters={filters}
+            pokemonPoints={pokemonPoints}
+          />
+          <LoadPresetModal
+            isOpen={showLoadPresetModal}
+            onClose={() => setShowLoadPresetModal(false)}
+            onLoad={handleLoadPreset}
+          />
+        </>
+      )}
     </div>
   )
 }

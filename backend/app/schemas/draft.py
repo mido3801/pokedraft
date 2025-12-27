@@ -154,3 +154,22 @@ class AnonymousDraftResponse(Draft):
     rejoin_code: str
     join_url: str
     team_id: str
+
+
+class DraftSummary(BaseModel):
+    """Summary of a draft for listing."""
+
+    id: UUID
+    season_id: Optional[UUID] = None
+    rejoin_code: Optional[str] = None
+    format: DraftFormat
+    status: DraftStatus
+    roster_size: int
+    team_count: int
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
