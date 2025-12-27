@@ -6,6 +6,11 @@ from app.core.config import settings
 from app.websocket.draft_handler import router as ws_router
 from app.websocket.trade_handler import router as trade_ws_router
 
+# Startup debug info
+print(f"[STARTUP] DEV_MODE: {settings.DEV_MODE}")
+print(f"[STARTUP] SUPABASE_JWT_SECRET configured: {bool(settings.SUPABASE_JWT_SECRET)}")
+print(f"[STARTUP] SUPABASE_JWT_SECRET length: {len(settings.SUPABASE_JWT_SECRET)}")
+
 app = FastAPI(
     title="Pokemon Draft League API",
     description="API for managing Pokemon draft leagues",

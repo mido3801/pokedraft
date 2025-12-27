@@ -27,6 +27,7 @@ function App() {
             <Route path="auth/callback" element={<AuthCallback />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="leagues" element={<LeagueList />} />
+            <Route path="leagues/join" element={<JoinLeague />} />
             <Route path="leagues/:leagueId" element={<LeagueDetail />} />
             <Route path="leagues/:leagueId/join" element={<JoinLeague />} />
             <Route path="leagues/:leagueId/settings" element={<LeagueSettings />} />

@@ -1,8 +1,7 @@
 import secrets
-from datetime import datetime, timedelta
 from typing import Optional
 import jwt
-from jwt import PyJWTError
+from jwt import PyJWTError, PyJWKClient
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -13,6 +12,19 @@ from app.core.config import settings
 from app.core.database import get_db
 
 security = HTTPBearer(auto_error=False)
+
+# JWKS client for Supabase token verification (ES256)
+_jwks_client: Optional[PyJWKClient] = None
+
+
+def get_jwks_client() -> Optional[PyJWKClient]:
+    """Get or create the JWKS client for Supabase."""
+    global _jwks_client
+    if _jwks_client is None and settings.SUPABASE_URL:
+        jwks_url = f"{settings.SUPABASE_URL}/auth/v1/.well-known/jwks.json"
+        _jwks_client = PyJWKClient(jwks_url, cache_keys=True)
+        print(f"[AUTH] Initialized JWKS client: {jwks_url}")
+    return _jwks_client
 
 
 def generate_session_token() -> str:
@@ -39,9 +51,28 @@ def generate_invite_code() -> str:
 def decode_supabase_token(token: str) -> Optional[dict]:
     """Decode and validate a Supabase JWT token."""
     try:
-        # Supabase uses the JWT secret from the project settings
-        # For development, we can decode without verification
-        # In production, verify with SUPABASE_JWT_SECRET
+        # Get the algorithm from the token header
+        header = jwt.get_unverified_header(token)
+        alg = header.get("alg", "HS256")
+        print(f"[AUTH DEBUG] Token algorithm: {alg}")
+
+        # ES256 tokens require JWKS verification (Supabase default)
+        if alg == "ES256":
+            jwks_client = get_jwks_client()
+            if jwks_client:
+                signing_key = jwks_client.get_signing_key_from_jwt(token)
+                payload = jwt.decode(
+                    token,
+                    signing_key.key,
+                    algorithms=["ES256"],
+                    audience="authenticated",
+                )
+                return payload
+            else:
+                print("[AUTH DEBUG] No JWKS client available for ES256 token")
+                return None
+
+        # HS256 tokens use the JWT secret
         if settings.SUPABASE_JWT_SECRET:
             payload = jwt.decode(
                 token,
@@ -49,7 +80,9 @@ def decode_supabase_token(token: str) -> Optional[dict]:
                 algorithms=["HS256"],
                 audience="authenticated",
             )
-        elif settings.DEV_MODE:
+            return payload
+
+        if settings.DEV_MODE:
             # Development mode - try SECRET_KEY first (for dev tokens), then decode without verification
             try:
                 payload = jwt.decode(
@@ -66,9 +99,21 @@ def decode_supabase_token(token: str) -> Optional[dict]:
                 )
         else:
             # No JWT secret configured and not in dev mode
+            print(f"[AUTH DEBUG] No SUPABASE_JWT_SECRET configured and DEV_MODE is False")
             return None
         return payload
-    except PyJWTError:
+    except PyJWTError as e:
+        print(f"[AUTH DEBUG] JWT decode error: {type(e).__name__}: {e}")
+        # Try to decode without verification to see the token contents for debugging
+        try:
+            unverified = jwt.decode(token, options={"verify_signature": False})
+            print(f"[AUTH DEBUG] Unverified token payload: aud={unverified.get('aud')}, sub={unverified.get('sub')}")
+        except Exception:
+            pass
+        return None
+    except Exception as e:
+        # Catch network errors from JWKS client, etc.
+        print(f"[AUTH DEBUG] Unexpected error: {type(e).__name__}: {e}")
         return None
 
 

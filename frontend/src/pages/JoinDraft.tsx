@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { draftService } from '../services/draft'
 import { storage } from '../utils/storage'
 
@@ -11,7 +11,10 @@ interface JoinResponse {
 
 export default function JoinDraft() {
   const navigate = useNavigate()
-  const [rejoinCode, setRejoinCode] = useState('')
+  const [searchParams] = useSearchParams()
+  const codeFromUrl = searchParams.get('code')
+
+  const [rejoinCode, setRejoinCode] = useState(codeFromUrl?.toUpperCase() || '')
   const [displayName, setDisplayName] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)

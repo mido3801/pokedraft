@@ -310,16 +310,16 @@ export default function CreateDraft() {
           </div>
 
           <div>
-            <label className="label">Share Link</label>
+            <label className="label">Invite Link</label>
             <div className="flex gap-2">
               <input
                 type="text"
                 readOnly
-                value={`${window.location.origin}/d/${createdDraft.draftId}`}
+                value={`${window.location.origin}/draft/join?code=${createdDraft.rejoinCode}`}
                 className="input flex-1 text-sm bg-gray-50"
               />
               <button
-                onClick={() => copyToClipboard(`${window.location.origin}/d/${createdDraft.draftId}`)}
+                onClick={() => copyToClipboard(`${window.location.origin}/draft/join?code=${createdDraft.rejoinCode}`)}
                 className="btn btn-secondary px-4"
                 title="Copy link"
               >
@@ -336,10 +336,11 @@ export default function CreateDraft() {
         </div>
 
         <p className="text-center text-gray-500 mt-6 text-sm">
-          Others can join at{' '}
+          Others can also join at{' '}
           <a href="/draft/join" className="text-pokemon-red hover:underline">
             /draft/join
-          </a>
+          </a>{' '}
+          with the code above
         </p>
       </div>
     )

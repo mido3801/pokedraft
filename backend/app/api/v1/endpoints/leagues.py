@@ -161,6 +161,50 @@ async def join_league(
     return await build_league_response(league, db)
 
 
+@router.post("/join-by-code", response_model=League)
+async def join_league_by_code(
+    invite_code: str = Query(..., description="Invite code for the league"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Join a league using only the invite code."""
+    # Look up the league by invite code
+    result = await db.execute(
+        select(LeagueModel).where(LeagueModel.invite_code == invite_code)
+    )
+    league = result.scalar_one_or_none()
+
+    if not league:
+        raise not_found("League", "Invalid invite code")
+
+    # Check if already a member
+    membership_result = await db.execute(
+        select(LeagueMembership)
+        .where(LeagueMembership.league_id == league.id)
+        .where(LeagueMembership.user_id == current_user.id)
+    )
+    existing = membership_result.scalar_one_or_none()
+
+    if existing:
+        if existing.is_active:
+            raise bad_request("Already a member of this league")
+        else:
+            # Reactivate membership
+            existing.is_active = True
+            await db.commit()
+    else:
+        # Create membership
+        membership = LeagueMembership(
+            league_id=league.id,
+            user_id=current_user.id,
+        )
+        db.add(membership)
+        await db.commit()
+
+    await db.refresh(league)
+    return await build_league_response(league, db)
+
+
 @router.delete("/{league_id}/leave")
 async def leave_league(
     league_id: UUID,

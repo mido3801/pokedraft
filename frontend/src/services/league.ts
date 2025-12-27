@@ -36,6 +36,10 @@ export const leagueService = {
     return api.post<League>(`/leagues/${leagueId}/join${inviteCode ? `?invite_code=${inviteCode}` : ''}`)
   },
 
+  async joinLeagueByCode(inviteCode: string): Promise<League> {
+    return api.post<League>(`/leagues/join-by-code?invite_code=${encodeURIComponent(inviteCode)}`)
+  },
+
   async leaveLeague(leagueId: string): Promise<void> {
     await api.delete(`/leagues/${leagueId}/leave`)
   },
