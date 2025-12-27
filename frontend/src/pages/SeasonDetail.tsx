@@ -877,13 +877,6 @@ export default function SeasonDetail() {
                       <div key={pokemon.id} className="flex items-center gap-2 text-sm">
                         <img src={getSpriteUrl(pokemon.pokemon_id)} alt={pokemon.pokemon_name} className="w-6 h-6" />
                         <span className="capitalize">{pokemon.pokemon_name}</span>
-                        <div className="flex gap-1">
-                          {pokemon.types.map((type) => (
-                            <span key={type} className={`type-badge text-xs bg-type-${type}`}>
-                              {type}
-                            </span>
-                          ))}
-                        </div>
                       </div>
                     ))}
                   </div>

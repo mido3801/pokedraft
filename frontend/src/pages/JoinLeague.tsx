@@ -7,7 +7,7 @@ export default function JoinLeague() {
   const { leagueId } = useParams<{ leagueId: string }>()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { user, isLoading: authLoading } = useAuth()
+  const { user, loading: authLoading } = useAuth()
 
   const [isJoining, setIsJoining] = useState(false)
   const [error, setError] = useState<string | null>(null)
