@@ -155,6 +155,50 @@ class PokeAPIService:
 
         return self._format_pokemon(pokemon, sprite_style)
 
+    async def get_pokemon_batch(
+        self,
+        pokemon_ids: List[int],
+        db: AsyncSession,
+        sprite_style: SpriteStyle | str | None = None,
+    ) -> Dict[int, dict]:
+        """
+        Get multiple Pokemon by their IDs in a single query.
+
+        This is more efficient than calling get_pokemon() in a loop.
+
+        Args:
+            pokemon_ids: List of Pokemon IDs to fetch
+            db: Database session
+            sprite_style: Optional sprite style
+
+        Returns:
+            Dictionary mapping pokemon_id -> pokemon data dict
+        """
+        if not pokemon_ids:
+            return {}
+
+        # Remove duplicates while preserving order isn't needed for a dict
+        unique_ids = list(set(pokemon_ids))
+
+        stmt = (
+            select(Pokemon)
+            .options(
+                selectinload(Pokemon.species),
+                selectinload(Pokemon.types).selectinload(PokemonTypeLink.type),
+                selectinload(Pokemon.stats).selectinload(PokemonStatValue.stat),
+                selectinload(Pokemon.abilities).selectinload(PokemonAbilityLink.ability),
+            )
+            .where(Pokemon.id.in_(unique_ids))
+        )
+
+        result = await db.execute(stmt)
+        pokemon_list = result.scalars().all()
+
+        return {
+            p.id: self._format_pokemon(p, sprite_style)
+            for p in pokemon_list
+        }
+
     async def get_pokemon_by_name(
         self,
         name: str,

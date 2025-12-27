@@ -78,6 +78,7 @@ class DraftCreate(DraftBase):
     """Schema for creating a draft."""
 
     pokemon_pool: list[PokemonPoolEntry] = []
+    pokemon_filters: Optional[PokemonFilters] = None
     template_id: Optional[str] = None
 
 
@@ -131,6 +132,7 @@ class Draft(DraftBase):
     created_at: datetime
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    team_id: Optional[str] = None  # Creator's team_id for league drafts
 
     class Config:
         from_attributes = True

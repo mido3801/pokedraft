@@ -1,49 +1,55 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+"""
+Authentication endpoints.
+
+In production, authentication is handled via Supabase OAuth.
+The dev-login endpoint is only available when DEV_MODE=True.
+"""
+
+from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
-from uuid import uuid4
 import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.core.security import get_current_user, get_current_user_optional
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.errors import not_found
 from app.schemas.user import User, UserUpdate
 from app.models.user import User as UserModel
 
 router = APIRouter()
 
 
-@router.post("/login")
-async def login():
-    """OAuth callback - exchange code for session."""
-    # TODO: Implement Supabase OAuth flow
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Not implemented",
-    )
-
-
 @router.post("/dev-login")
-async def dev_login(db: AsyncSession = Depends(get_db)):
-    """Development-only login - creates a test user and returns a JWT token."""
-    if not settings.DEV_MODE:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Not found",
-        )
+@router.post("/dev-login/{user_number}")
+async def dev_login(user_number: int = 1, db: AsyncSession = Depends(get_db)):
+    """
+    Development-only login - creates a test user and returns a JWT token.
 
-    # Create or get dev user
-    dev_user_id = "00000000-0000-0000-0000-000000000001"
-    from sqlalchemy import select
+    This endpoint is only available when DEV_MODE=True.
+    In production, authentication should be handled via Supabase OAuth.
+
+    Args:
+        user_number: Which test user to login as (1-9). Defaults to 1.
+    """
+    if not settings.DEV_MODE:
+        raise not_found("Endpoint")
+
+    # Clamp user_number to valid range
+    user_number = max(1, min(9, user_number))
+
+    # Create or get dev user with unique ID based on user_number
+    dev_user_id = f"00000000-0000-0000-0000-00000000000{user_number}"
     result = await db.execute(select(UserModel).where(UserModel.id == dev_user_id))
     user = result.scalar_one_or_none()
 
     if user is None:
         user = UserModel(
             id=dev_user_id,
-            email="dev@pokedraft.example.com",
-            display_name="Dev User",
+            email=f"testuser{user_number}@pokedraft.example.com",
+            display_name=f"Test User {user_number}",
             avatar_url=None,
         )
         db.add(user)
@@ -51,6 +57,7 @@ async def dev_login(db: AsyncSession = Depends(get_db)):
         await db.refresh(user)
 
     # Generate a JWT token that matches Supabase format
+    now = datetime.now(timezone.utc)
     token_payload = {
         "sub": str(user.id),
         "email": user.email,
@@ -58,8 +65,8 @@ async def dev_login(db: AsyncSession = Depends(get_db)):
             "full_name": user.display_name,
         },
         "aud": "authenticated",
-        "exp": datetime.utcnow() + timedelta(days=settings.SESSION_EXPIRE_DAYS),
-        "iat": datetime.utcnow(),
+        "exp": now + timedelta(days=settings.SESSION_EXPIRE_DAYS),
+        "iat": now,
     }
 
     # Use SECRET_KEY for signing in dev mode
@@ -77,16 +84,6 @@ async def dev_login(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.post("/logout")
-async def logout(current_user=Depends(get_current_user)):
-    """End the current session."""
-    # TODO: Implement session termination
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Not implemented",
-    )
-
-
 @router.get("/me", response_model=Optional[User])
 async def get_current_user_info(current_user=Depends(get_current_user_optional)):
     """Get current user info, or null if not authenticated."""
@@ -96,11 +93,16 @@ async def get_current_user_info(current_user=Depends(get_current_user_optional))
 @router.put("/me", response_model=User)
 async def update_current_user(
     update: UserUpdate,
-    current_user=Depends(get_current_user),
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Update current user's profile."""
-    # TODO: Implement user update
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Not implemented",
-    )
+    if update.display_name is not None:
+        current_user.display_name = update.display_name
+    if update.avatar_url is not None:
+        current_user.avatar_url = update.avatar_url
+
+    await db.commit()
+    await db.refresh(current_user)
+
+    return current_user

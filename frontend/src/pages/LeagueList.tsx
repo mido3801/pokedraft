@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { leagueService } from '../services/league'
+import { queryKeys } from '../services/queryKeys'
 import { League, DraftFormat } from '../types'
 import {
   Trophy,
@@ -60,7 +61,7 @@ export default function LeagueList() {
   const [copied, setCopied] = useState(false)
 
   const { data: leagues, isLoading } = useQuery({
-    queryKey: ['leagues'],
+    queryKey: queryKeys.leagues,
     queryFn: leagueService.getLeagues,
   })
 
@@ -73,7 +74,7 @@ export default function LeagueList() {
         settings: form.settings,
       }),
     onSuccess: (league) => {
-      queryClient.invalidateQueries({ queryKey: ['leagues'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.leagues })
       setCreatedLeague(league)
     },
   })

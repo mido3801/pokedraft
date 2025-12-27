@@ -323,7 +323,26 @@ export interface Trade {
   message?: string
   created_at: string
   resolved_at?: string
+  // Extended details from response builder
+  proposer_pokemon_details?: TradePokemonDetail[]
+  recipient_pokemon_details?: TradePokemonDetail[]
 }
+
+export interface TradePokemonDetail {
+  id: string
+  pokemon_id: number
+  name: string
+  types: string[]
+}
+
+// Trade WebSocket event types
+export type TradeWebSocketEvent =
+  | { event: 'trade_proposed'; data: { trade: Trade } }
+  | { event: 'trade_accepted'; data: { trade_id: string; requires_approval: boolean; trade?: Trade } }
+  | { event: 'trade_rejected'; data: { trade_id: string } }
+  | { event: 'trade_cancelled'; data: { trade_id: string } }
+  | { event: 'trade_approved'; data: { trade_id: string; trade: Trade } }
+  | { event: 'error'; data: { message: string; code: string } }
 
 // WebSocket event types
 export type WebSocketEvent =

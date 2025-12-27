@@ -4,28 +4,8 @@ import { useWebSocket } from '../hooks/useWebSocket'
 import { useEffect, useState, useCallback } from 'react'
 import { draftService } from '../services/draft'
 import { useSprite } from '../context/SpriteContext'
-import type { Pokemon } from '../types'
-
-const TYPE_COLORS: Record<string, string> = {
-  normal: '#A8A878',
-  fire: '#F08030',
-  water: '#6890F0',
-  electric: '#F8D030',
-  grass: '#78C850',
-  ice: '#98D8D8',
-  fighting: '#C03028',
-  poison: '#A040A0',
-  ground: '#E0C068',
-  flying: '#A890F0',
-  psychic: '#F85888',
-  bug: '#A8B820',
-  rock: '#B8A038',
-  ghost: '#705898',
-  dragon: '#7038F8',
-  dark: '#705848',
-  steel: '#B8B8D0',
-  fairy: '#EE99AC',
-}
+import { storage } from '../utils/storage'
+import { TYPE_COLORS, type Pokemon } from '../types'
 
 function TypeBadge({ type }: { type: string }) {
   return (
@@ -54,13 +34,45 @@ export default function DraftRoom() {
   const { draftId } = useParams<{ draftId: string }>()
   const { getSpriteUrl, spriteStyle, setSpriteStyle, getSpriteStyleLabel } = useSprite()
 
-  // Read team ID and session token synchronously to avoid race condition with WebSocket
-  const [myTeamId] = useState<string | null>(() =>
-    draftId ? localStorage.getItem(`draft_team_${draftId}`) : null
-  )
-  const [sessionToken] = useState<string | null>(() =>
-    draftId ? localStorage.getItem(`draft_session_${draftId}`) : null
-  )
+  // Read team ID and session token from localStorage initially
+  const [myTeamId, setMyTeamId] = useState<string | null>(() => {
+    if (!draftId) return null
+    const session = storage.getDraftSession(draftId)
+    return session.team
+  })
+  const [sessionToken] = useState<string | null>(() => {
+    if (!draftId) return null
+    const session = storage.getDraftSession(draftId)
+    return session.session
+  })
+
+  // For league drafts, fetch team_id from API if not in localStorage
+  useEffect(() => {
+    async function fetchMyTeam() {
+      if (!draftId || myTeamId) return
+
+      // Check if user has an auth token (league member)
+      const token = storage.getToken()
+      if (!token) return
+
+      try {
+        const result = await draftService.getMyTeam(draftId)
+        if (result.team_id) {
+          // Store in localStorage for future visits
+          storage.setDraftSession(draftId, {
+            session: '',
+            team: result.team_id,
+            rejoin: '',
+          })
+          setMyTeamId(result.team_id)
+        }
+      } catch (err) {
+        // User might not be part of this draft - that's ok
+        console.log('Could not fetch team for draft:', err)
+      }
+    }
+    fetchMyTeam()
+  }, [draftId, myTeamId])
 
   const [showExportModal, setShowExportModal] = useState(false)
   const [exportContent, setExportContent] = useState('')

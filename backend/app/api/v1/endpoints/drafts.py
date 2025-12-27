@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, status, Query
 from uuid import UUID
 from datetime import datetime, timedelta
 from typing import Optional
@@ -13,6 +13,16 @@ from app.core.security import (
     generate_rejoin_code,
 )
 from app.core.config import settings
+from app.core.errors import (
+    season_not_found,
+    draft_not_found,
+    team_not_found,
+    not_league_owner,
+    bad_request,
+    forbidden,
+    unauthorized,
+)
+from app.core.auth import get_season as fetch_season
 from app.schemas.draft import (
     Draft,
     DraftCreate,
@@ -25,8 +35,8 @@ from app.schemas.draft import (
 from app.schemas.team import ShowdownExport
 from app.models.draft import Draft as DraftModel, DraftPick, DraftStatus
 from app.models.season import Season as SeasonModel
-from app.models.league import League as LeagueModel
-from app.models.team import Team as TeamModel, TeamPokemon
+from app.models.league import League as LeagueModel, LeagueMembership
+from app.models.team import Team as TeamModel
 from app.models.user import User
 from app.services.team_export import team_export_service
 from app.services.pokeapi import pokeapi_service
@@ -42,21 +52,14 @@ async def create_draft(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a draft for a season (league owner only)."""
-    # Get season and verify ownership
-    result = await db.execute(
-        select(SeasonModel).where(SeasonModel.id == season_id)
-    )
-    season = result.scalar_one_or_none()
-
-    if not season:
-        raise HTTPException(status_code=404, detail="Season not found")
+    season = await fetch_season(season_id, db)
 
     # Check if season already has a draft
     existing_result = await db.execute(
         select(DraftModel).where(DraftModel.season_id == season_id)
     )
     if existing_result.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Season already has a draft")
+        raise bad_request("Season already has a draft")
 
     # Verify user is league owner
     league_result = await db.execute(
@@ -65,19 +68,44 @@ async def create_draft(
     league = league_result.scalar_one_or_none()
 
     if not league or league.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Only the league owner can create drafts")
+        raise not_league_owner()
 
-    # Build pokemon pool
+    # Build pokemon pool - load from database if not provided
     pokemon_pool = {}
-    for entry in draft.pokemon_pool:
-        pokemon_pool[str(entry.pokemon_id)] = {
-            "name": entry.name,
-            "points": entry.points,
-            "types": entry.types,
-            "generation": entry.generation,
-        }
+    if draft.pokemon_pool:
+        for entry in draft.pokemon_pool:
+            pokemon_pool[str(entry.pokemon_id)] = {
+                "name": entry.name,
+                "points": entry.points,
+                "types": entry.types,
+                "generation": entry.generation,
+            }
+    else:
+        # Load all Pokemon from database with full metadata
+        all_pokemon = await pokeapi_service.get_all_pokemon_for_box(db)
+
+        # Apply filters if provided
+        if draft.pokemon_filters:
+            all_pokemon = _apply_pokemon_filters(all_pokemon, draft.pokemon_filters)
+
+        for p in all_pokemon:
+            pokemon_pool[str(p["id"])] = {
+                "name": p["name"],
+                "points": None,
+                "types": p["types"],
+                "generation": p.get("generation"),
+                "bst": p.get("bst"),
+                "evolution_stage": p.get("evolution_stage"),
+                "is_legendary": p.get("is_legendary", False),
+                "is_mythical": p.get("is_mythical", False),
+            }
+
+    # Generate draft ID explicitly so we can use it for teams
+    import uuid
+    draft_id = uuid.uuid4()
 
     db_draft = DraftModel(
+        id=draft_id,
         season_id=season_id,
         format=draft.format,
         timer_seconds=draft.timer_seconds,
@@ -85,12 +113,69 @@ async def create_draft(
         budget_per_team=draft.budget_per_team,
         roster_size=draft.roster_size,
         pokemon_pool=pokemon_pool,
+        nomination_timer_seconds=draft.nomination_timer_seconds,
+        min_bid=draft.min_bid,
+        bid_increment=draft.bid_increment,
     )
     db.add(db_draft)
+
+    # Get all league members to create teams
+    members_result = await db.execute(
+        select(LeagueMembership, User)
+        .join(User, LeagueMembership.user_id == User.id)
+        .where(LeagueMembership.league_id == league.id)
+        .where(LeagueMembership.is_active == True)
+    )
+    members = members_result.all()
+
+    # Re-order: creator first, then others in order
+    ordered_members = []
+    for membership, user in members:
+        if user.id == current_user.id:
+            ordered_members.insert(0, (membership, user))
+        else:
+            ordered_members.append((membership, user))
+
+    creator_team_id = None
+
+    for position, (membership, user) in enumerate(ordered_members):
+        team_id = uuid.uuid4()
+        team = TeamModel(
+            id=team_id,
+            draft_id=draft_id,
+            season_id=season_id,
+            user_id=user.id,
+            display_name=user.display_name or user.email.split('@')[0],
+            draft_position=position,
+            budget_remaining=draft.budget_per_team if draft.budget_enabled else None,
+        )
+        db.add(team)
+
+        # Track creator's team_id
+        if user.id == current_user.id:
+            creator_team_id = team_id
+
     await db.commit()
     await db.refresh(db_draft)
 
-    return db_draft
+    # Return draft with creator's team_id
+    return {
+        "id": db_draft.id,
+        "season_id": db_draft.season_id,
+        "format": db_draft.format,
+        "timer_seconds": db_draft.timer_seconds,
+        "budget_enabled": db_draft.budget_enabled,
+        "budget_per_team": db_draft.budget_per_team,
+        "roster_size": db_draft.roster_size,
+        "status": db_draft.status,
+        "current_pick": db_draft.current_pick,
+        "pokemon_pool": db_draft.pokemon_pool,
+        "pick_order": db_draft.pick_order,
+        "created_at": db_draft.created_at,
+        "started_at": db_draft.started_at,
+        "completed_at": db_draft.completed_at,
+        "team_id": str(creator_team_id) if creator_team_id else None,
+    }
 
 
 def _apply_pokemon_filters(pokemon_list: list[dict], filters: PokemonFilters) -> list[dict]:
@@ -254,13 +339,13 @@ async def join_anonymous_draft(
     draft = result.scalar_one_or_none()
 
     if not draft:
-        raise HTTPException(status_code=404, detail="Draft not found")
+        raise draft_not_found()
 
     if draft.status != DraftStatus.PENDING:
-        raise HTTPException(status_code=400, detail="Draft has already started")
+        raise bad_request("Draft has already started")
 
     if draft.expires_at and draft.expires_at < datetime.utcnow():
-        raise HTTPException(status_code=400, detail="Draft session has expired")
+        raise bad_request("Draft session has expired")
 
     # Check if name is already taken
     existing_result = await db.execute(
@@ -269,7 +354,7 @@ async def join_anonymous_draft(
         .where(TeamModel.display_name == display_name)
     )
     if existing_result.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Display name already taken")
+        raise bad_request("Display name already taken")
 
     # Get current team count for draft position
     count_result = await db.execute(
@@ -312,9 +397,30 @@ async def get_draft(
     draft = result.scalar_one_or_none()
 
     if not draft:
-        raise HTTPException(status_code=404, detail="Draft not found")
+        raise draft_not_found(draft_id)
 
     return draft
+
+
+@router.get("/{draft_id}/my-team")
+async def get_my_team(
+    draft_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get the current user's team for this draft (for league drafts)."""
+    # Find team by user_id
+    result = await db.execute(
+        select(TeamModel)
+        .where(TeamModel.draft_id == draft_id)
+        .where(TeamModel.user_id == current_user.id)
+    )
+    team = result.scalar_one_or_none()
+
+    if not team:
+        raise team_not_found()
+
+    return {"team_id": str(team.id), "display_name": team.display_name}
 
 
 @router.get("/{draft_id}/state", response_model=DraftState)
@@ -330,7 +436,7 @@ async def get_draft_state(
     draft = result.scalar_one_or_none()
 
     if not draft:
-        raise HTTPException(status_code=404, detail="Draft not found")
+        raise draft_not_found(draft_id)
 
     # Get teams
     teams_result = await db.execute(
@@ -422,20 +528,20 @@ async def start_draft(
     draft = result.scalar_one_or_none()
 
     if not draft:
-        raise HTTPException(status_code=404, detail="Draft not found")
+        raise draft_not_found(draft_id)
 
     if draft.status != DraftStatus.PENDING:
-        raise HTTPException(status_code=400, detail="Draft is not in pending state")
+        raise bad_request("Draft is not in pending state")
 
     # Verify authorization - must be draft creator
     if draft.session_token:
         # Anonymous draft - verify session token matches creator
         if session_token != draft.session_token:
-            raise HTTPException(status_code=403, detail="Only the draft creator can start the draft")
+            raise forbidden("Only the draft creator can start the draft")
     elif draft.season_id:
         # League draft - verify user is league owner
         if not current_user:
-            raise HTTPException(status_code=401, detail="Authentication required")
+            raise unauthorized()
         season_result = await db.execute(
             select(SeasonModel).where(SeasonModel.id == draft.season_id)
         )
@@ -446,7 +552,7 @@ async def start_draft(
             )
             league = league_result.scalar_one_or_none()
             if not league or league.owner_id != current_user.id:
-                raise HTTPException(status_code=403, detail="Only the league owner can start the draft")
+                raise not_league_owner()
 
     # Get teams and set pick order
     teams_result = await db.execute(
@@ -457,7 +563,7 @@ async def start_draft(
     teams = teams_result.scalars().all()
 
     if len(teams) < 2:
-        raise HTTPException(status_code=400, detail="Need at least 2 teams to start")
+        raise bad_request("Need at least 2 teams to start")
 
     draft.status = DraftStatus.LIVE
     draft.started_at = datetime.utcnow()
@@ -482,10 +588,10 @@ async def pause_draft(
     draft = result.scalar_one_or_none()
 
     if not draft:
-        raise HTTPException(status_code=404, detail="Draft not found")
+        raise draft_not_found(draft_id)
 
     if draft.status != DraftStatus.LIVE:
-        raise HTTPException(status_code=400, detail="Draft is not live")
+        raise bad_request("Draft is not live")
 
     draft.status = DraftStatus.PAUSED
     await db.commit()
@@ -506,10 +612,10 @@ async def resume_draft(
     draft = result.scalar_one_or_none()
 
     if not draft:
-        raise HTTPException(status_code=404, detail="Draft not found")
+        raise draft_not_found(draft_id)
 
     if draft.status != DraftStatus.PAUSED:
-        raise HTTPException(status_code=400, detail="Draft is not paused")
+        raise bad_request("Draft is not paused")
 
     draft.status = DraftStatus.LIVE
     await db.commit()
@@ -533,10 +639,10 @@ async def export_team(
     team = result.scalar_one_or_none()
 
     if not team:
-        raise HTTPException(status_code=404, detail="Team not found")
+        raise team_not_found(team_id)
 
     if team.draft_id != draft_id:
-        raise HTTPException(status_code=400, detail="Team does not belong to this draft")
+        raise bad_request("Team does not belong to this draft")
 
     # Get team's pokemon
     picks_result = await db.execute(
@@ -560,4 +666,4 @@ async def export_team(
         content = await team_export_service.to_csv(team.display_name, pokemon_ids, db)
         return {"content": content, "filename": f"{team.display_name.replace(' ', '_')}_team.csv"}
     else:
-        raise HTTPException(status_code=400, detail="Invalid format. Use: showdown, json, csv")
+        raise bad_request("Invalid format. Use: showdown, json, csv")

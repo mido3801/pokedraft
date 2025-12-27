@@ -1,7 +1,7 @@
 import { api } from './api'
 import { Draft, DraftState, PokemonFilters } from '../types'
 
-interface CreateDraftParams {
+export interface CreateDraftParams {
   format: string
   timer_seconds?: number
   budget_enabled?: boolean
@@ -62,5 +62,9 @@ export const draftService = {
 
   async exportTeam(draftId: string, teamId: string, format = 'showdown'): Promise<{ content: string; filename: string }> {
     return api.get(`/drafts/${draftId}/export?team_id=${teamId}&format=${format}`)
+  },
+
+  async getMyTeam(draftId: string): Promise<{ team_id: string; display_name: string }> {
+    return api.get(`/drafts/${draftId}/my-team`)
   },
 }

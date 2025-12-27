@@ -1,24 +1,41 @@
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { teamService } from '../services/team'
 import { matchService, ScheduleFormat } from '../services/match'
 import { tradeService } from '../services/trade'
-import { Season, Match, Trade, SeedingMode } from '../types'
+import { draftService, CreateDraftParams } from '../services/draft'
+import { queryKeys } from '../services/queryKeys'
+import { Season, Match, SeedingMode, DraftFormat, PokemonFilters, LeagueSettings, DEFAULT_POKEMON_FILTERS } from '../types'
 import { api } from '../services/api'
 import { useSprite } from '../context/SpriteContext'
+import { useAuth } from '../context/AuthContext'
+import { storage } from '../utils/storage'
 import BracketDisplay from '../components/BracketDisplay'
+import PokemonFiltersComponent from '../components/PokemonFilters'
+import TradeCard from '../components/TradeCard'
+import TradeProposalModal from '../components/TradeProposalModal'
+import { useTradeWebSocket } from '../hooks/useTradeWebSocket'
 
 // Need to add a season service endpoint
-const getSeason = async (seasonId: string): Promise<Season & { league_name?: string; league_id?: string; draft_id?: string }> => {
+const getSeason = async (seasonId: string): Promise<Season & {
+  league_name?: string
+  league_id?: string
+  draft_id?: string
+  is_owner?: boolean
+  league_settings?: LeagueSettings
+}> => {
   return api.get(`/seasons/${seasonId}`)
 }
 
 export default function SeasonDetail() {
   const { seasonId } = useParams<{ seasonId: string }>()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { getSpriteUrl } = useSprite()
+  const { user } = useAuth()
   const [activeTab, setActiveTab] = useState<'standings' | 'schedule' | 'teams' | 'trades'>('standings')
+  const [showTradeModal, setShowTradeModal] = useState(false)
   const [showScheduleModal, setShowScheduleModal] = useState(false)
   const [scheduleFormat, setScheduleFormat] = useState<ScheduleFormat>('round_robin')
   const [seedingMode, setSeedingMode] = useState<SeedingMode>('standings')
@@ -31,27 +48,50 @@ export default function SeasonDetail() {
     replay_url: '',
     notes: '',
   })
+  // Draft creation state
+  const [showDraftModal, setShowDraftModal] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
+  const [draftForm, setDraftForm] = useState<{
+    format: DraftFormat
+    rosterSize: number
+    timerSeconds: number
+    budgetEnabled: boolean
+    budgetPerTeam: number
+    nominationTimerSeconds: number
+    minBid: number
+    bidIncrement: number
+  }>({
+    format: 'snake',
+    rosterSize: 6,
+    timerSeconds: 90,
+    budgetEnabled: false,
+    budgetPerTeam: 100,
+    nominationTimerSeconds: 30,
+    minBid: 1,
+    bidIncrement: 1,
+  })
+  const [pokemonFilters, setPokemonFilters] = useState<PokemonFilters>(DEFAULT_POKEMON_FILTERS)
 
   const { data: season, isLoading: seasonLoading } = useQuery({
-    queryKey: ['season', seasonId],
+    queryKey: queryKeys.season(seasonId!),
     queryFn: () => getSeason(seasonId!),
     enabled: !!seasonId,
   })
 
   const { data: teams } = useQuery({
-    queryKey: ['season-teams', seasonId],
+    queryKey: queryKeys.seasonTeams(seasonId!),
     queryFn: () => teamService.getTeams({ season_id: seasonId }),
     enabled: !!seasonId,
   })
 
   const { data: standings } = useQuery({
-    queryKey: ['season-standings', seasonId],
+    queryKey: queryKeys.seasonStandings(seasonId!),
     queryFn: () => matchService.getStandings(seasonId!),
     enabled: !!seasonId && (season?.status === 'active' || season?.status === 'completed'),
   })
 
   const { data: schedule } = useQuery({
-    queryKey: ['season-schedule', seasonId],
+    queryKey: queryKeys.seasonSchedule(seasonId!),
     queryFn: () => matchService.getSchedule(seasonId!),
     enabled: !!seasonId,
   })
@@ -61,15 +101,74 @@ export default function SeasonDetail() {
     (schedule[0].schedule_format === 'single_elimination' || schedule[0].schedule_format === 'double_elimination')
 
   const { data: bracket } = useQuery({
-    queryKey: ['season-bracket', seasonId],
+    queryKey: queryKeys.seasonBracket(seasonId!),
     queryFn: () => matchService.getBracket(seasonId!),
     enabled: !!seasonId && isBracketFormat,
   })
 
   const { data: trades } = useQuery({
-    queryKey: ['season-trades', seasonId],
+    queryKey: queryKeys.seasonTrades(seasonId!),
     queryFn: () => tradeService.getTrades(seasonId!),
     enabled: !!seasonId,
+  })
+
+  // Find current user's team in this season
+  const myTeam = useMemo(() => {
+    if (!user || !teams) return null
+    return teams.find((t) => t.user_id === user.id) || null
+  }, [user, teams])
+
+  // Trade mutations
+  const acceptTradeMutation = useMutation({
+    mutationFn: (tradeId: string) => tradeService.acceptTrade(tradeId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonTrades(seasonId!) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonTeams(seasonId!) })
+    },
+  })
+
+  const rejectTradeMutation = useMutation({
+    mutationFn: (tradeId: string) => tradeService.rejectTrade(tradeId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonTrades(seasonId!) })
+    },
+  })
+
+  const cancelTradeMutation = useMutation({
+    mutationFn: (tradeId: string) => tradeService.cancelTrade(tradeId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonTrades(seasonId!) })
+    },
+  })
+
+  const approveTradeMutation = useMutation({
+    mutationFn: (tradeId: string) => tradeService.approveTrade(tradeId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonTrades(seasonId!) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonTeams(seasonId!) })
+    },
+  })
+
+  // Real-time trade updates via WebSocket
+  useTradeWebSocket({
+    seasonId: seasonId!,
+    enabled: !!seasonId && season?.status === 'active',
+    onTradeProposed: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonTrades(seasonId!) })
+    },
+    onTradeAccepted: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonTrades(seasonId!) })
+    },
+    onTradeRejected: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonTrades(seasonId!) })
+    },
+    onTradeCancelled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonTrades(seasonId!) })
+    },
+    onTradeApproved: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonTrades(seasonId!) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonTeams(seasonId!) })
+    },
   })
 
   const generateScheduleMutation = useMutation({
@@ -79,8 +178,8 @@ export default function SeasonDetail() {
       include_bracket_reset: includeBracketReset,
     }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['season-schedule', seasonId] })
-      queryClient.invalidateQueries({ queryKey: ['season-bracket', seasonId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonSchedule(seasonId!) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonBracket(seasonId!) })
       setShowScheduleModal(false)
     },
   })
@@ -94,13 +193,63 @@ export default function SeasonDetail() {
         notes: params.notes || undefined,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['season-schedule', seasonId] })
-      queryClient.invalidateQueries({ queryKey: ['season-standings', seasonId] })
-      queryClient.invalidateQueries({ queryKey: ['season-bracket', seasonId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonSchedule(seasonId!) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonStandings(seasonId!) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonBracket(seasonId!) })
       setShowResultModal(false)
       setSelectedMatch(null)
     },
   })
+
+  const createDraftMutation = useMutation({
+    mutationFn: (params: CreateDraftParams) => draftService.createDraft(seasonId!, params),
+    onSuccess: (data: { id: string; team_id?: string }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.season(seasonId!) })
+      setShowDraftModal(false)
+      // Store team_id in localStorage for the draft room to identify us
+      if (data.team_id) {
+        const draftId = String(data.id)
+        storage.setDraftSession(draftId, {
+          session: '', // No session token for league drafts
+          team: data.team_id,
+          rejoin: '', // No rejoin code for league drafts
+        })
+      }
+      // Navigate to the draft room
+      navigate(`/d/${data.id}`)
+    },
+  })
+
+  const handleCreateDraft = () => {
+    const isAuction = draftForm.format === 'auction'
+    const params: CreateDraftParams = {
+      format: draftForm.format,
+      roster_size: draftForm.rosterSize,
+      timer_seconds: draftForm.timerSeconds,
+      budget_enabled: isAuction || draftForm.budgetEnabled,
+      budget_per_team: (isAuction || draftForm.budgetEnabled) ? draftForm.budgetPerTeam : undefined,
+      pokemon_filters: pokemonFilters,
+      nomination_timer_seconds: isAuction ? draftForm.nominationTimerSeconds : undefined,
+      min_bid: isAuction ? draftForm.minBid : undefined,
+      bid_increment: isAuction ? draftForm.bidIncrement : undefined,
+    }
+    createDraftMutation.mutate(params)
+  }
+
+  // Initialize draft form with league settings when modal opens
+  const openDraftModal = () => {
+    if (season?.league_settings) {
+      setDraftForm(prev => ({
+        ...prev,
+        format: season.league_settings?.draft_format || 'snake',
+        rosterSize: season.league_settings?.roster_size || 6,
+        timerSeconds: season.league_settings?.timer_seconds || 90,
+        budgetEnabled: season.league_settings?.budget_enabled || false,
+        budgetPerTeam: season.league_settings?.budget_per_team || 100,
+      }))
+    }
+    setShowDraftModal(true)
+  }
 
   const getStatusBadge = (status: Season['status']) => {
     const styles = {
@@ -118,20 +267,6 @@ export default function SeasonDetail() {
     return (
       <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status]}`}>
         {labels[status]}
-      </span>
-    )
-  }
-
-  const getTradeStatusBadge = (status: Trade['status']) => {
-    const styles = {
-      pending: 'bg-yellow-100 text-yellow-800',
-      accepted: 'bg-green-100 text-green-800',
-      rejected: 'bg-red-100 text-red-800',
-      cancelled: 'bg-gray-100 text-gray-800',
-    }
-    return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status]}`}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
       </span>
     )
   }
@@ -344,6 +479,210 @@ export default function SeasonDetail() {
         </div>
       )}
 
+      {/* Draft Creation Modal */}
+      {showDraftModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">Start Draft</h2>
+              <button onClick={() => setShowDraftModal(false)} className="text-gray-500 hover:text-gray-700">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {createDraftMutation.isError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+                {createDraftMutation.error instanceof Error ? createDraftMutation.error.message : 'Failed to create draft'}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {/* Draft Format */}
+              <div>
+                <label className="label">Draft Format</label>
+                <select
+                  value={draftForm.format}
+                  onChange={(e) => setDraftForm({ ...draftForm, format: e.target.value as DraftFormat })}
+                  className="input"
+                >
+                  <option value="snake">Snake Draft</option>
+                  <option value="linear">Linear Draft</option>
+                  <option value="auction">Auction Draft</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  {draftForm.format === 'snake' && 'Pick order reverses each round (1→8, 8→1, 1→8...)'}
+                  {draftForm.format === 'linear' && 'Same pick order every round (1→8, 1→8...)'}
+                  {draftForm.format === 'auction' && 'Pokemon are nominated and teams bid. Highest bidder wins.'}
+                </p>
+              </div>
+
+              {/* Auction-specific settings */}
+              {draftForm.format === 'auction' && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-4">
+                  <h3 className="font-medium text-blue-800">Auction Settings</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="label">Starting Budget</label>
+                      <input
+                        type="number"
+                        value={draftForm.budgetPerTeam}
+                        onChange={(e) => setDraftForm({ ...draftForm, budgetPerTeam: parseInt(e.target.value) })}
+                        className="input"
+                        min={1}
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Minimum Bid</label>
+                      <input
+                        type="number"
+                        value={draftForm.minBid}
+                        onChange={(e) => setDraftForm({ ...draftForm, minBid: parseInt(e.target.value) })}
+                        className="input"
+                        min={1}
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Bid Increment</label>
+                      <input
+                        type="number"
+                        value={draftForm.bidIncrement}
+                        onChange={(e) => setDraftForm({ ...draftForm, bidIncrement: parseInt(e.target.value) })}
+                        className="input"
+                        min={1}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="label">Nomination Timer (seconds)</label>
+                      <input
+                        type="number"
+                        value={draftForm.nominationTimerSeconds}
+                        onChange={(e) => setDraftForm({ ...draftForm, nominationTimerSeconds: parseInt(e.target.value) })}
+                        className="input"
+                        min={10}
+                        max={300}
+                      />
+                    </div>
+                    <div>
+                      <label className="label">Bid Timer (seconds)</label>
+                      <input
+                        type="number"
+                        value={draftForm.timerSeconds}
+                        onChange={(e) => setDraftForm({ ...draftForm, timerSeconds: parseInt(e.target.value) })}
+                        className="input"
+                        min={5}
+                        max={120}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Roster Size */}
+              <div>
+                <label className="label">Roster Size</label>
+                <input
+                  type="number"
+                  value={draftForm.rosterSize}
+                  onChange={(e) => setDraftForm({ ...draftForm, rosterSize: parseInt(e.target.value) })}
+                  className="input"
+                  min={1}
+                  max={20}
+                />
+              </div>
+
+              {/* Timer and budget for non-auction formats */}
+              {draftForm.format !== 'auction' && (
+                <>
+                  <div>
+                    <label className="label">Timer (seconds per pick)</label>
+                    <input
+                      type="number"
+                      value={draftForm.timerSeconds}
+                      onChange={(e) => setDraftForm({ ...draftForm, timerSeconds: parseInt(e.target.value) })}
+                      className="input"
+                      min={30}
+                      max={600}
+                    />
+                  </div>
+
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="budgetEnabled"
+                      checked={draftForm.budgetEnabled}
+                      onChange={(e) => setDraftForm({ ...draftForm, budgetEnabled: e.target.checked })}
+                      className="h-4 w-4 text-pokemon-red rounded border-gray-300"
+                    />
+                    <label htmlFor="budgetEnabled" className="ml-2 text-sm text-gray-700">
+                      Enable point cap
+                    </label>
+                  </div>
+
+                  {draftForm.budgetEnabled && (
+                    <div>
+                      <label className="label">Point Budget Per Team</label>
+                      <input
+                        type="number"
+                        value={draftForm.budgetPerTeam}
+                        onChange={(e) => setDraftForm({ ...draftForm, budgetPerTeam: parseInt(e.target.value) })}
+                        className="input"
+                        min={1}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Pokemon Filters */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700"
+                >
+                  <svg
+                    className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-90' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                  {showFilters ? 'Hide' : 'Show'} Pokemon Pool Filters
+                </button>
+
+                {showFilters && (
+                  <div className="mt-4">
+                    <PokemonFiltersComponent
+                      filters={pokemonFilters}
+                      onChange={setPokemonFilters}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2 pt-4">
+                <button
+                  onClick={handleCreateDraft}
+                  className="btn btn-primary flex-1"
+                  disabled={createDraftMutation.isPending}
+                >
+                  {createDraftMutation.isPending ? 'Creating Draft...' : 'Create & Enter Draft'}
+                </button>
+                <button onClick={() => setShowDraftModal(false)} className="btn btn-secondary">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex justify-between items-start mb-6">
         <div>
@@ -361,6 +700,11 @@ export default function SeasonDetail() {
           </p>
         </div>
         <div className="flex gap-2">
+          {season.status === 'pre_draft' && !season.draft_id && season.is_owner && (
+            <button onClick={openDraftModal} className="btn btn-primary">
+              Start Draft
+            </button>
+          )}
           {season.status === 'pre_draft' && season.draft_id && (
             <Link to={`/d/${season.draft_id}`} className="btn btn-primary">
               Go to Draft
@@ -557,45 +901,87 @@ export default function SeasonDetail() {
       )}
 
       {activeTab === 'trades' && (
-        <div className="card">
-          <h2 className="text-lg font-semibold mb-4">Trades</h2>
-          {trades && trades.length > 0 ? (
-            <div className="space-y-4">
-              {trades.map((trade) => (
-                <div key={trade.id} className="p-4 border rounded-lg">
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="text-sm text-gray-500">
-                      {new Date(trade.created_at).toLocaleDateString()}
-                    </div>
-                    {getTradeStatusBadge(trade.status)}
+        <div className="space-y-6">
+          {/* Admin Approval Panel */}
+          {season?.is_owner && season?.league_settings?.trade_approval_required && (
+            (() => {
+              const pendingApprovalTrades = trades?.filter(
+                (t) => t.status === 'accepted' && t.requires_approval && !t.admin_approved
+              ) || []
+              if (pendingApprovalTrades.length === 0) return null
+              return (
+                <div className="card border-yellow-200 bg-yellow-50">
+                  <h2 className="text-lg font-semibold mb-4 text-yellow-800">
+                    Trades Awaiting Approval ({pendingApprovalTrades.length})
+                  </h2>
+                  <div className="space-y-4">
+                    {pendingApprovalTrades.map((trade) => (
+                      <TradeCard
+                        key={trade.id}
+                        trade={trade}
+                        currentUserTeamId={myTeam?.id}
+                        isLeagueOwner={season?.is_owner ?? false}
+                        onApprove={() => approveTradeMutation.mutate(trade.id)}
+                        isLoading={approveTradeMutation.isPending}
+                      />
+                    ))}
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="flex-1">
-                      <p className="font-medium">{trade.proposer_team_name}</p>
-                      <p className="text-sm text-gray-500">
-                        Sends: {trade.proposer_pokemon.length} Pokemon
-                      </p>
-                    </div>
-                    <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                    </svg>
-                    <div className="flex-1 text-right">
-                      <p className="font-medium">{trade.recipient_team_name}</p>
-                      <p className="text-sm text-gray-500">
-                        Sends: {trade.recipient_pokemon.length} Pokemon
-                      </p>
-                    </div>
-                  </div>
-                  {trade.message && (
-                    <p className="text-sm text-gray-600 mt-2 italic">"{trade.message}"</p>
-                  )}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-500 text-center py-8">No trades yet this season.</p>
+              )
+            })()
           )}
+
+          {/* Main Trades Card */}
+          <div className="card">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold">Trades</h2>
+              {myTeam && season?.status === 'active' && (
+                <button
+                  onClick={() => setShowTradeModal(true)}
+                  className="btn btn-primary"
+                >
+                  Propose Trade
+                </button>
+              )}
+            </div>
+
+            {trades && trades.length > 0 ? (
+              <div className="space-y-4">
+                {trades.map((trade) => (
+                  <TradeCard
+                    key={trade.id}
+                    trade={trade}
+                    currentUserTeamId={myTeam?.id}
+                    isLeagueOwner={season?.is_owner ?? false}
+                    onAccept={() => acceptTradeMutation.mutate(trade.id)}
+                    onReject={() => rejectTradeMutation.mutate(trade.id)}
+                    onCancel={() => cancelTradeMutation.mutate(trade.id)}
+                    onApprove={() => approveTradeMutation.mutate(trade.id)}
+                    isLoading={
+                      acceptTradeMutation.isPending ||
+                      rejectTradeMutation.isPending ||
+                      cancelTradeMutation.isPending ||
+                      approveTradeMutation.isPending
+                    }
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500 text-center py-8">No trades yet this season.</p>
+            )}
+          </div>
         </div>
+      )}
+
+      {/* Trade Proposal Modal */}
+      {showTradeModal && myTeam && teams && (
+        <TradeProposalModal
+          isOpen={showTradeModal}
+          onClose={() => setShowTradeModal(false)}
+          seasonId={seasonId!}
+          myTeam={myTeam}
+          otherTeams={teams.filter((t) => t.id !== myTeam.id)}
+        />
       )}
     </div>
   )

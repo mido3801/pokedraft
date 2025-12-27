@@ -2,6 +2,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { leagueService } from '../services/league'
+import { queryKeys } from '../services/queryKeys'
 import { useAuth } from '../context/AuthContext'
 import { Season } from '../types'
 
@@ -15,13 +16,13 @@ export default function LeagueDetail() {
   const [keepTeams, setKeepTeams] = useState(false)
 
   const { data: league, isLoading: leagueLoading, error: leagueError } = useQuery({
-    queryKey: ['league', leagueId],
+    queryKey: queryKeys.league(leagueId!),
     queryFn: () => leagueService.getLeague(leagueId!),
     enabled: !!leagueId,
   })
 
   const { data: seasons, isLoading: seasonsLoading } = useQuery({
-    queryKey: ['league-seasons', leagueId],
+    queryKey: queryKeys.leagueSeasons(leagueId!),
     queryFn: () => leagueService.getSeasons(leagueId!),
     enabled: !!leagueId,
   })
@@ -29,7 +30,7 @@ export default function LeagueDetail() {
   const createSeasonMutation = useMutation({
     mutationFn: () => leagueService.createSeason(leagueId!, { keep_teams: keepTeams }),
     onSuccess: (newSeason) => {
-      queryClient.invalidateQueries({ queryKey: ['league-seasons', leagueId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.leagueSeasons(leagueId!) })
       setShowSeasonModal(false)
       navigate(`/seasons/${newSeason.id}`)
     },
@@ -38,7 +39,7 @@ export default function LeagueDetail() {
   const regenerateInviteMutation = useMutation({
     mutationFn: () => leagueService.regenerateInvite(leagueId!),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['league', leagueId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.league(leagueId!) })
     },
   })
 

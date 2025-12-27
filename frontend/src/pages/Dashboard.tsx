@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
 import { leagueService } from '../services/league'
+import { queryKeys } from '../services/queryKeys'
 import {
   Play,
   Trophy,
@@ -20,7 +21,7 @@ export default function Dashboard() {
   const { user } = useAuth()
 
   const { data: leagues, isLoading: leaguesLoading } = useQuery({
-    queryKey: ['leagues'],
+    queryKey: queryKeys.leagues,
     queryFn: leagueService.getLeagues,
   })
 

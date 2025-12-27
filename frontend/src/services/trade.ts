@@ -11,7 +11,8 @@ interface ProposeTradeParams {
 
 export const tradeService = {
   async proposeTrade(params: ProposeTradeParams): Promise<Trade> {
-    return api.post<Trade>('/trades', params)
+    const { season_id, ...body } = params
+    return api.post<Trade>(`/trades?season_id=${season_id}`, body)
   },
 
   async getTrades(seasonId: string): Promise<Trade[]> {

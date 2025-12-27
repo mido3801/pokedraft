@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { DraftFormat, PokemonFilters, PokemonBoxEntry, PokemonPointsMap, DEFAULT_POKEMON_FILTERS } from '../types'
 import { draftService } from '../services/draft'
 import { pokemonService } from '../services/pokemon'
+import { storage } from '../utils/storage'
 import PokemonBox from '../components/PokemonBox'
 import PokemonFiltersComponent from '../components/PokemonFilters'
 import PointsManager from '../components/PointsManager'
@@ -206,10 +207,11 @@ export default function CreateDraft() {
       })
 
       // Store session token, team ID, and rejoin code for reconnection
-      localStorage.setItem(`draft_session_${response.id}`, response.session_token)
-      localStorage.setItem(`draft_team_${response.id}`, response.team_id)
-      localStorage.setItem(`draft_rejoin_${response.id}`, response.rejoin_code)
-      localStorage.setItem('last_draft_id', response.id)
+      storage.setDraftSession(response.id, {
+        session: response.session_token,
+        team: response.team_id,
+        rejoin: response.rejoin_code,
+      })
 
       setCreatedDraft({
         draftId: response.id,

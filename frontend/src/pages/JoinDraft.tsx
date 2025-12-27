@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { draftService } from '../services/draft'
+import { storage } from '../utils/storage'
 
 interface JoinResponse {
   draft_id: string
@@ -38,10 +39,11 @@ export default function JoinDraft() {
       ) as JoinResponse
 
       // Store session token and rejoin code for reconnection
-      localStorage.setItem(`draft_session_${response.draft_id}`, response.session_token)
-      localStorage.setItem(`draft_team_${response.draft_id}`, response.team_id)
-      localStorage.setItem(`draft_rejoin_${response.draft_id}`, rejoinCode.trim().toUpperCase())
-      localStorage.setItem('last_draft_id', response.draft_id)
+      storage.setDraftSession(response.draft_id, {
+        session: response.session_token,
+        team: response.team_id,
+        rejoin: rejoinCode.trim().toUpperCase(),
+      })
 
       navigate(`/d/${response.draft_id}`)
     } catch (err) {

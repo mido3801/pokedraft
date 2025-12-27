@@ -1,33 +1,32 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, status, Query
 from uuid import UUID
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import get_current_user, generate_invite_code
+from app.core.errors import (
+    league_not_found,
+    not_league_member,
+    not_league_owner,
+    bad_request,
+    forbidden,
+    not_found,
+)
+from app.core.auth import (
+    get_league as fetch_league,
+    require_league_owner,
+    require_league_member,
+    check_league_membership,
+)
 from app.schemas.league import League, LeagueCreate, LeagueUpdate, LeagueInvite, LeagueMember
 from app.schemas.season import Season, SeasonCreate
 from app.models.league import League as LeagueModel, LeagueMembership
 from app.models.season import Season as SeasonModel
 from app.models.user import User
+from app.services.response_builders import build_league_response
 
 router = APIRouter()
-
-
-def league_to_response(league: LeagueModel, member_count: int = None, current_season: int = None) -> dict:
-    """Convert League model to response dict."""
-    return {
-        "id": league.id,
-        "name": league.name,
-        "owner_id": league.owner_id,
-        "invite_code": league.invite_code,
-        "is_public": league.is_public,
-        "description": league.description,
-        "settings": league.settings,
-        "created_at": league.created_at,
-        "member_count": member_count,
-        "current_season": current_season,
-    }
 
 
 @router.post("", response_model=League, status_code=status.HTTP_201_CREATED)
@@ -46,7 +45,7 @@ async def create_league(
         settings=league.settings.model_dump(),
     )
     db.add(db_league)
-    await db.flush()  # Flush to get the league ID
+    await db.flush()
 
     # Add owner as first member
     membership = LeagueMembership(
@@ -58,7 +57,7 @@ async def create_league(
     await db.commit()
     await db.refresh(db_league)
 
-    return league_to_response(db_league, member_count=1, current_season=None)
+    return await build_league_response(db_league, db, member_count=1, current_season=None)
 
 
 @router.get("", response_model=list[League])
@@ -75,26 +74,7 @@ async def list_user_leagues(
     )
     leagues = result.scalars().all()
 
-    response = []
-    for league in leagues:
-        # Get member count
-        count_result = await db.execute(
-            select(func.count(LeagueMembership.id))
-            .where(LeagueMembership.league_id == league.id)
-            .where(LeagueMembership.is_active == True)
-        )
-        member_count = count_result.scalar()
-
-        # Get current season number
-        season_result = await db.execute(
-            select(func.max(SeasonModel.season_number))
-            .where(SeasonModel.league_id == league.id)
-        )
-        current_season = season_result.scalar()
-
-        response.append(league_to_response(league, member_count, current_season))
-
-    return response
+    return [await build_league_response(league, db) for league in leagues]
 
 
 @router.get("/public", response_model=list[League])
@@ -112,24 +92,7 @@ async def list_public_leagues(
     )
     leagues = result.scalars().all()
 
-    response = []
-    for league in leagues:
-        count_result = await db.execute(
-            select(func.count(LeagueMembership.id))
-            .where(LeagueMembership.league_id == league.id)
-            .where(LeagueMembership.is_active == True)
-        )
-        member_count = count_result.scalar()
-
-        season_result = await db.execute(
-            select(func.max(SeasonModel.season_number))
-            .where(SeasonModel.league_id == league.id)
-        )
-        current_season = season_result.scalar()
-
-        response.append(league_to_response(league, member_count, current_season))
-
-    return response
+    return [await build_league_response(league, db) for league in leagues]
 
 
 @router.get("/{league_id}", response_model=League)
@@ -139,40 +102,14 @@ async def get_league(
     db: AsyncSession = Depends(get_db),
 ):
     """Get league details."""
-    result = await db.execute(
-        select(LeagueModel).where(LeagueModel.id == league_id)
-    )
-    league = result.scalar_one_or_none()
-
-    if not league:
-        raise HTTPException(status_code=404, detail="League not found")
+    league = await fetch_league(league_id, db)
 
     # Check if user is a member or league is public
-    membership_result = await db.execute(
-        select(LeagueMembership)
-        .where(LeagueMembership.league_id == league_id)
-        .where(LeagueMembership.user_id == current_user.id)
-        .where(LeagueMembership.is_active == True)
-    )
-    is_member = membership_result.scalar_one_or_none() is not None
-
+    is_member = await check_league_membership(league_id, current_user, db)
     if not is_member and not league.is_public:
-        raise HTTPException(status_code=403, detail="Not authorized to view this league")
+        raise not_league_member()
 
-    count_result = await db.execute(
-        select(func.count(LeagueMembership.id))
-        .where(LeagueMembership.league_id == league.id)
-        .where(LeagueMembership.is_active == True)
-    )
-    member_count = count_result.scalar()
-
-    season_result = await db.execute(
-        select(func.max(SeasonModel.season_number))
-        .where(SeasonModel.league_id == league.id)
-    )
-    current_season = season_result.scalar()
-
-    return league_to_response(league, member_count, current_season)
+    return await build_league_response(league, db)
 
 
 @router.put("/{league_id}", response_model=League)
@@ -183,16 +120,10 @@ async def update_league(
     db: AsyncSession = Depends(get_db),
 ):
     """Update league settings (owner only)."""
-    result = await db.execute(
-        select(LeagueModel).where(LeagueModel.id == league_id)
-    )
-    league = result.scalar_one_or_none()
-
-    if not league:
-        raise HTTPException(status_code=404, detail="League not found")
+    league = await fetch_league(league_id, db)
 
     if league.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Only the owner can update league settings")
+        raise not_league_owner()
 
     if update.name is not None:
         league.name = update.name
@@ -206,20 +137,7 @@ async def update_league(
     await db.commit()
     await db.refresh(league)
 
-    count_result = await db.execute(
-        select(func.count(LeagueMembership.id))
-        .where(LeagueMembership.league_id == league.id)
-        .where(LeagueMembership.is_active == True)
-    )
-    member_count = count_result.scalar()
-
-    season_result = await db.execute(
-        select(func.max(SeasonModel.season_number))
-        .where(SeasonModel.league_id == league.id)
-    )
-    current_season = season_result.scalar()
-
-    return league_to_response(league, member_count, current_season)
+    return await build_league_response(league, db)
 
 
 @router.post("/{league_id}/join", response_model=League)
@@ -230,13 +148,7 @@ async def join_league(
     db: AsyncSession = Depends(get_db),
 ):
     """Join a league via invite code."""
-    result = await db.execute(
-        select(LeagueModel).where(LeagueModel.id == league_id)
-    )
-    league = result.scalar_one_or_none()
-
-    if not league:
-        raise HTTPException(status_code=404, detail="League not found")
+    league = await fetch_league(league_id, db)
 
     # Check if already a member
     membership_result = await db.execute(
@@ -248,7 +160,7 @@ async def join_league(
 
     if existing:
         if existing.is_active:
-            raise HTTPException(status_code=400, detail="Already a member of this league")
+            raise bad_request("Already a member of this league")
         else:
             # Reactivate membership
             existing.is_active = True
@@ -257,7 +169,7 @@ async def join_league(
         # Validate invite code for private leagues
         if not league.is_public:
             if not invite_code or invite_code != league.invite_code:
-                raise HTTPException(status_code=403, detail="Invalid invite code")
+                raise forbidden("Invalid invite code")
 
         # Create membership
         membership = LeagueMembership(
@@ -268,21 +180,7 @@ async def join_league(
         await db.commit()
 
     await db.refresh(league)
-
-    count_result = await db.execute(
-        select(func.count(LeagueMembership.id))
-        .where(LeagueMembership.league_id == league.id)
-        .where(LeagueMembership.is_active == True)
-    )
-    member_count = count_result.scalar()
-
-    season_result = await db.execute(
-        select(func.max(SeasonModel.season_number))
-        .where(SeasonModel.league_id == league.id)
-    )
-    current_season = season_result.scalar()
-
-    return league_to_response(league, member_count, current_season)
+    return await build_league_response(league, db)
 
 
 @router.delete("/{league_id}/leave")
@@ -292,16 +190,10 @@ async def leave_league(
     db: AsyncSession = Depends(get_db),
 ):
     """Leave a league."""
-    result = await db.execute(
-        select(LeagueModel).where(LeagueModel.id == league_id)
-    )
-    league = result.scalar_one_or_none()
-
-    if not league:
-        raise HTTPException(status_code=404, detail="League not found")
+    league = await fetch_league(league_id, db)
 
     if league.owner_id == current_user.id:
-        raise HTTPException(status_code=400, detail="Owner cannot leave the league")
+        raise bad_request("Owner cannot leave the league")
 
     membership_result = await db.execute(
         select(LeagueMembership)
@@ -312,7 +204,7 @@ async def leave_league(
     membership = membership_result.scalar_one_or_none()
 
     if not membership:
-        raise HTTPException(status_code=400, detail="Not a member of this league")
+        raise bad_request("Not a member of this league")
 
     membership.is_active = False
     await db.commit()
@@ -328,14 +220,9 @@ async def get_league_members(
 ):
     """Get all members of a league."""
     # Verify user is a member
-    membership_check = await db.execute(
-        select(LeagueMembership)
-        .where(LeagueMembership.league_id == league_id)
-        .where(LeagueMembership.user_id == current_user.id)
-        .where(LeagueMembership.is_active == True)
-    )
-    if not membership_check.scalar_one_or_none():
-        raise HTTPException(status_code=403, detail="Not a member of this league")
+    is_member = await check_league_membership(league_id, current_user, db)
+    if not is_member:
+        raise not_league_member()
 
     result = await db.execute(
         select(LeagueMembership, User)
@@ -364,19 +251,13 @@ async def remove_league_member(
     db: AsyncSession = Depends(get_db),
 ):
     """Remove a member from the league (owner only)."""
-    result = await db.execute(
-        select(LeagueModel).where(LeagueModel.id == league_id)
-    )
-    league = result.scalar_one_or_none()
-
-    if not league:
-        raise HTTPException(status_code=404, detail="League not found")
+    league = await fetch_league(league_id, db)
 
     if league.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Only the owner can remove members")
+        raise not_league_owner()
 
     if user_id == current_user.id:
-        raise HTTPException(status_code=400, detail="Cannot remove yourself")
+        raise bad_request("Cannot remove yourself")
 
     membership_result = await db.execute(
         select(LeagueMembership)
@@ -387,7 +268,7 @@ async def remove_league_member(
     membership = membership_result.scalar_one_or_none()
 
     if not membership:
-        raise HTTPException(status_code=404, detail="User is not a member")
+        raise not_found("User", "not a member")
 
     membership.is_active = False
     await db.commit()
@@ -402,16 +283,10 @@ async def regenerate_invite(
     db: AsyncSession = Depends(get_db),
 ):
     """Regenerate league invite code (owner only)."""
-    result = await db.execute(
-        select(LeagueModel).where(LeagueModel.id == league_id)
-    )
-    league = result.scalar_one_or_none()
-
-    if not league:
-        raise HTTPException(status_code=404, detail="League not found")
+    league = await fetch_league(league_id, db)
 
     if league.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Only the owner can regenerate invite code")
+        raise not_league_owner()
 
     league.invite_code = generate_invite_code()
     await db.commit()
@@ -430,16 +305,10 @@ async def create_season(
     db: AsyncSession = Depends(get_db),
 ):
     """Start a new season in the league (owner only)."""
-    result = await db.execute(
-        select(LeagueModel).where(LeagueModel.id == league_id)
-    )
-    league = result.scalar_one_or_none()
-
-    if not league:
-        raise HTTPException(status_code=404, detail="League not found")
+    league = await fetch_league(league_id, db)
 
     if league.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Only the owner can create seasons")
+        raise not_league_owner()
 
     # Get next season number
     season_result = await db.execute(
@@ -469,14 +338,9 @@ async def list_seasons(
 ):
     """List all seasons in a league."""
     # Verify user is a member
-    membership_check = await db.execute(
-        select(LeagueMembership)
-        .where(LeagueMembership.league_id == league_id)
-        .where(LeagueMembership.user_id == current_user.id)
-        .where(LeagueMembership.is_active == True)
-    )
-    if not membership_check.scalar_one_or_none():
-        raise HTTPException(status_code=403, detail="Not a member of this league")
+    is_member = await check_league_membership(league_id, current_user, db)
+    if not is_member:
+        raise not_league_member()
 
     result = await db.execute(
         select(SeasonModel)

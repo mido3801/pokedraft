@@ -21,8 +21,8 @@ export const authService = {
     window.location.href = '/api/v1/auth/login'
   },
 
-  async devLogin(): Promise<User> {
-    const response = await api.post<DevLoginResponse>('/auth/dev-login')
+  async devLogin(userNumber: number = 1): Promise<User> {
+    const response = await api.post<DevLoginResponse>(`/auth/dev-login/${userNumber}`)
     setStoredToken(response.access_token)
     return response.user
   },

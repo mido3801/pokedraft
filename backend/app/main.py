@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.websocket.draft_handler import router as ws_router
+from app.websocket.trade_handler import router as trade_ws_router
 
 app = FastAPI(
     title="Pokemon Draft League API",
@@ -26,6 +27,7 @@ app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 
 # Include WebSocket routes
 app.include_router(ws_router)
+app.include_router(trade_ws_router)
 
 
 @app.get("/health")

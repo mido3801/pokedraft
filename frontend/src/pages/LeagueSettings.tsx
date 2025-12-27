@@ -2,6 +2,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, useEffect } from 'react'
 import { leagueService } from '../services/league'
+import { queryKeys } from '../services/queryKeys'
 import { useAuth } from '../context/AuthContext'
 import { DraftFormat } from '../types'
 
@@ -27,7 +28,7 @@ export default function LeagueSettings() {
   const [error, setError] = useState('')
 
   const { data: league, isLoading, error: loadError } = useQuery({
-    queryKey: ['league', leagueId],
+    queryKey: queryKeys.league(leagueId!),
     queryFn: () => leagueService.getLeague(leagueId!),
     enabled: !!leagueId,
   })
@@ -54,7 +55,7 @@ export default function LeagueSettings() {
   const updateMutation = useMutation({
     mutationFn: (data: typeof formData) => leagueService.updateLeague(leagueId!, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['league', leagueId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.league(leagueId!) })
       navigate(`/leagues/${leagueId}`)
     },
     onError: (err: Error) => {

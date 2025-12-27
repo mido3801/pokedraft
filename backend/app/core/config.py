@@ -1,5 +1,6 @@
+import warnings
 from pydantic_settings import BaseSettings
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from typing import Union
 
 
@@ -10,7 +11,7 @@ class Settings(BaseSettings):
     API_V1_PREFIX: str = "/api/v1"
 
     # Development
-    DEV_MODE: bool = True  # Set to False in production
+    DEV_MODE: bool = True  # Set to False in production via environment variable
 
     # CORS - accepts comma-separated string or list
     CORS_ORIGINS: Union[list[str], str] = ["http://localhost:3000", "http://localhost:5173"]
@@ -49,6 +50,25 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
+
+    @model_validator(mode="after")
+    def validate_production_settings(self):
+        """Validate that production-critical settings are properly configured."""
+        # Warn about insecure SECRET_KEY in non-dev mode
+        if not self.DEV_MODE and self.SECRET_KEY == "change-me-in-production":
+            raise ValueError(
+                "SECRET_KEY must be changed from default value in production. "
+                "Set the SECRET_KEY environment variable to a secure random value."
+            )
+
+        # Warn about missing Supabase config in non-dev mode
+        if not self.DEV_MODE and not self.SUPABASE_JWT_SECRET:
+            warnings.warn(
+                "SUPABASE_JWT_SECRET is not set. Authentication will not work in production.",
+                UserWarning,
+            )
+
+        return self
 
     @property
     def async_database_url(self) -> str:

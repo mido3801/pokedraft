@@ -10,6 +10,7 @@ from app.websocket.connection_manager import ConnectionManager
 from app.websocket.draft_room import DraftRoom, DraftParticipant, DraftPick
 from app.models.draft import Draft as DraftModel, DraftPick as DraftPickModel, DraftStatus
 from app.models.team import Team as TeamModel
+from app.models.season import Season as SeasonModel, SeasonStatus
 
 router = APIRouter()
 manager = ConnectionManager()
@@ -141,7 +142,7 @@ async def save_pick_to_db(draft_id: UUID, team_id: UUID, pokemon_id: int, pick_n
 
 
 async def complete_draft_in_db(draft_id: UUID):
-    """Mark draft as completed in database."""
+    """Mark draft as completed in database and update season status."""
     async with async_session_maker() as db:
         result = await db.execute(
             select(DraftModel).where(DraftModel.id == draft_id)
@@ -150,11 +151,22 @@ async def complete_draft_in_db(draft_id: UUID):
         if draft:
             draft.status = DraftStatus.COMPLETED
             draft.completed_at = datetime.utcnow()
+
+            # Update season status to active if this is a league draft
+            if draft.season_id:
+                season_result = await db.execute(
+                    select(SeasonModel).where(SeasonModel.id == draft.season_id)
+                )
+                season = season_result.scalar_one_or_none()
+                if season:
+                    season.status = SeasonStatus.ACTIVE
+                    season.started_at = datetime.utcnow()
+
             await db.commit()
 
 
 async def start_draft_in_db(draft_id: UUID, pick_order: list[UUID]) -> bool:
-    """Start the draft in database."""
+    """Start the draft in database and update season status."""
     async with async_session_maker() as db:
         result = await db.execute(
             select(DraftModel).where(DraftModel.id == draft_id)
@@ -164,6 +176,16 @@ async def start_draft_in_db(draft_id: UUID, pick_order: list[UUID]) -> bool:
             draft.status = DraftStatus.LIVE
             draft.started_at = datetime.utcnow()
             draft.pick_order = [str(tid) for tid in pick_order]
+
+            # Update season status to drafting if this is a league draft
+            if draft.season_id:
+                season_result = await db.execute(
+                    select(SeasonModel).where(SeasonModel.id == draft.season_id)
+                )
+                season = season_result.scalar_one_or_none()
+                if season:
+                    season.status = SeasonStatus.DRAFTING
+
             await db.commit()
             return True
         return False

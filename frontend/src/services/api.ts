@@ -1,17 +1,11 @@
+import { storage } from '../utils/storage'
+
 const API_BASE = '/api/v1'
-const TOKEN_KEY = 'pokedraft_token'
 
-export function getStoredToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY)
-}
-
-export function setStoredToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token)
-}
-
-export function clearStoredToken(): void {
-  localStorage.removeItem(TOKEN_KEY)
-}
+// Re-export storage token helpers for backward compatibility
+export const getStoredToken = storage.getToken
+export const setStoredToken = storage.setToken
+export const clearStoredToken = storage.clearToken
 
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE'

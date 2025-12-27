@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
+import { storage, type SpriteStyle } from '../utils/storage'
 
-export type SpriteStyle = 'default' | 'official-artwork' | 'home'
+export type { SpriteStyle }
 
 // Sprite URL paths for each style (using PokeAPI CDN)
 const SPRITE_PATHS: Record<SpriteStyle, string> = {
@@ -18,23 +19,16 @@ interface SpriteContextType {
   getSpriteUrl: (pokemonId: number) => string
 }
 
-const STORAGE_KEY = 'pokemon-sprite-style'
-
 const SpriteContext = createContext<SpriteContextType | undefined>(undefined)
 
 export function SpriteProvider({ children }: { children: ReactNode }) {
   const [spriteStyle, setSpriteStyleState] = useState<SpriteStyle>(() => {
-    // Load from localStorage on init
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored && ['default', 'official-artwork', 'home'].includes(stored)) {
-      return stored as SpriteStyle
-    }
-    return 'official-artwork'
+    return storage.getSpriteStyle()
   })
 
   const setSpriteStyle = (style: SpriteStyle) => {
     setSpriteStyleState(style)
-    localStorage.setItem(STORAGE_KEY, style)
+    storage.setSpriteStyle(style)
   }
 
   const getSpriteStyleLabel = (style: SpriteStyle): string => {

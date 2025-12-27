@@ -1,10 +1,12 @@
 import { useAuth } from '../context/AuthContext'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useSearchParams } from 'react-router-dom'
 import { useState } from 'react'
 
 export default function Login() {
   const { isAuthenticated, login, devLogin, loading } = useAuth()
   const [devLoading, setDevLoading] = useState(false)
+  const [searchParams] = useSearchParams()
+  const redirectTo = searchParams.get('redirect') || '/dashboard'
 
   if (loading) {
     return (
@@ -18,7 +20,7 @@ export default function Login() {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />
+    return <Navigate to={redirectTo} replace />
   }
 
   return (
@@ -52,20 +54,30 @@ export default function Login() {
 
           {/* Dev login - only shown in development */}
           {import.meta.env.DEV && (
-            <button
-              onClick={async () => {
-                setDevLoading(true)
-                try {
-                  await devLogin()
-                } finally {
-                  setDevLoading(false)
-                }
-              }}
-              disabled={devLoading}
-              className="w-full flex items-center justify-center px-4 py-3 border-2 border-dashed border-yellow-400 rounded-lg bg-yellow-50 text-yellow-700 hover:bg-yellow-100 disabled:opacity-50"
-            >
-              {devLoading ? 'Logging in...' : '🔧 Dev Login (Local Only)'}
-            </button>
+            <div className="border-2 border-dashed border-yellow-400 rounded-lg bg-yellow-50 p-4">
+              <p className="text-sm text-yellow-700 mb-3 text-center font-medium">
+                Dev Login (Local Only)
+              </p>
+              <div className="grid grid-cols-4 gap-2">
+                {[1, 2, 3, 4].map((num) => (
+                  <button
+                    key={num}
+                    onClick={async () => {
+                      setDevLoading(true)
+                      try {
+                        await devLogin(num)
+                      } finally {
+                        setDevLoading(false)
+                      }
+                    }}
+                    disabled={devLoading}
+                    className="flex items-center justify-center px-3 py-2 rounded-md bg-yellow-100 text-yellow-800 hover:bg-yellow-200 disabled:opacity-50 font-medium text-sm"
+                  >
+                    User {num}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
         </div>
 

@@ -1,15 +1,22 @@
 import random
 from collections import defaultdict
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, status, Query
 from uuid import UUID
 from datetime import datetime
-from typing import Optional
 from itertools import combinations
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.core.errors import (
+    season_not_found,
+    match_not_found,
+    not_league_owner,
+    bad_request,
+    not_found,
+)
+from app.core.auth import get_season as fetch_season
 from app.schemas.match import Match, MatchResult, Standings, TeamStanding, ScheduleGenerateRequest, BracketState
 from app.models.match import Match as MatchModel
 from app.models.team import Team as TeamModel
@@ -21,8 +28,8 @@ from app.services.bracket import (
     generate_double_elimination_bracket,
     process_bracket_progression,
     process_bye_matches,
-    get_round_name,
 )
+from app.services.response_builders import build_match_response
 
 router = APIRouter()
 
@@ -31,68 +38,6 @@ def compute_total_rounds(matches: list[MatchModel]) -> int:
     """Compute total rounds in bracket from matches."""
     winners_rounds = [m.bracket_round for m in matches if m.bracket_round and m.bracket_round > 0]
     return max(winners_rounds) if winners_rounds else 0
-
-
-async def match_to_response(match: MatchModel, db: AsyncSession, total_rounds: int = 0) -> dict:
-    """Convert match to response dict with team names."""
-    team_a = None
-    team_b = None
-
-    if match.team_a_id:
-        team_a_result = await db.execute(
-            select(TeamModel).where(TeamModel.id == match.team_a_id)
-        )
-        team_a = team_a_result.scalar_one_or_none()
-
-    if match.team_b_id:
-        team_b_result = await db.execute(
-            select(TeamModel).where(TeamModel.id == match.team_b_id)
-        )
-        team_b = team_b_result.scalar_one_or_none()
-
-    winner_name = None
-    if match.winner_id:
-        if match.winner_id == match.team_a_id:
-            winner_name = team_a.display_name if team_a else None
-        else:
-            winner_name = team_b.display_name if team_b else None
-
-    # Compute round name for bracket matches
-    round_name = None
-    if match.bracket_round is not None and total_rounds > 0:
-        is_losers = match.bracket_round < 0
-        round_name = get_round_name(match.bracket_round, total_rounds, is_losers)
-        if match.is_bracket_reset:
-            round_name = "Grand Finals Reset"
-
-    return {
-        "id": match.id,
-        "season_id": match.season_id,
-        "week": match.week,
-        "team_a_id": match.team_a_id,
-        "team_b_id": match.team_b_id,
-        "team_a_name": team_a.display_name if team_a else None,
-        "team_b_name": team_b.display_name if team_b else None,
-        "winner_id": match.winner_id,
-        "winner_name": winner_name,
-        "is_tie": match.is_tie,
-        "scheduled_at": match.scheduled_at,
-        "replay_url": match.replay_url,
-        "notes": match.notes,
-        "recorded_at": match.recorded_at,
-        "created_at": match.created_at,
-        # Bracket-specific fields
-        "schedule_format": match.schedule_format,
-        "bracket_round": match.bracket_round,
-        "bracket_position": match.bracket_position,
-        "next_match_id": match.next_match_id,
-        "loser_next_match_id": match.loser_next_match_id,
-        "seed_a": match.seed_a,
-        "seed_b": match.seed_b,
-        "is_bye": match.is_bye,
-        "is_bracket_reset": match.is_bracket_reset,
-        "round_name": round_name,
-    }
 
 
 @router.get("/schedule", response_model=list[Match])
@@ -110,12 +55,7 @@ async def get_schedule(
     result = await db.execute(query.order_by(MatchModel.week, MatchModel.created_at))
     matches = result.scalars().all()
 
-    response = []
-    for match in matches:
-        match_data = await match_to_response(match, db)
-        response.append(match_data)
-
-    return response
+    return [await build_match_response(match, db) for match in matches]
 
 
 @router.post("/schedule", response_model=list[Match], status_code=status.HTTP_201_CREATED)
@@ -126,14 +66,7 @@ async def generate_schedule(
     db: AsyncSession = Depends(get_db),
 ):
     """Generate a schedule for a season (league owner only)."""
-    # Get season
-    season_result = await db.execute(
-        select(SeasonModel).where(SeasonModel.id == season_id)
-    )
-    season = season_result.scalar_one_or_none()
-
-    if not season:
-        raise HTTPException(status_code=404, detail="Season not found")
+    season = await fetch_season(season_id, db)
 
     # Verify user is league owner
     league_result = await db.execute(
@@ -142,14 +75,14 @@ async def generate_schedule(
     league = league_result.scalar_one_or_none()
 
     if not league or league.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Only the league owner can generate schedules")
+        raise not_league_owner()
 
     # Check if schedule already exists
     existing_result = await db.execute(
         select(MatchModel).where(MatchModel.season_id == season_id)
     )
     if existing_result.scalars().first():
-        raise HTTPException(status_code=400, detail="Schedule already exists for this season")
+        raise bad_request("Schedule already exists for this season")
 
     # Get teams in the season
     teams_result = await db.execute(
@@ -158,7 +91,7 @@ async def generate_schedule(
     teams = teams_result.scalars().all()
 
     if len(teams) < 2:
-        raise HTTPException(status_code=400, detail="Need at least 2 teams to generate a schedule")
+        raise bad_request("Need at least 2 teams to generate a schedule")
 
     team_ids = [team.id for team in teams]
     matches = []
@@ -282,7 +215,7 @@ async def generate_schedule(
             await process_bracket_progression(bye_match, winner_id, None, db)
 
     else:
-        raise HTTPException(status_code=400, detail=f"Unsupported format: {request.format}")
+        raise bad_request(f"Unsupported format: {request.format}")
 
     await db.commit()
 
@@ -290,7 +223,7 @@ async def generate_schedule(
     response = []
     for match in matches:
         await db.refresh(match)
-        match_data = await match_to_response(match, db, total_rounds)
+        match_data = await build_match_response(match, db, total_rounds)
         response.append(match_data)
 
     return response
@@ -310,7 +243,7 @@ async def get_standings(
     teams = teams_result.scalars().all()
 
     if not teams:
-        raise HTTPException(status_code=404, detail="No teams found for this season")
+        raise not_found("Teams", f"in season {season_id}")
 
     standings = []
     for team in teams:
@@ -347,12 +280,12 @@ async def get_bracket(
     matches = result.scalars().all()
 
     if not matches:
-        raise HTTPException(status_code=404, detail="No schedule found for this season")
+        raise not_found("Schedule", f"for season {season_id}")
 
     # Check if it's a bracket format
     first_match = matches[0]
     if first_match.schedule_format not in ['single_elimination', 'double_elimination']:
-        raise HTTPException(status_code=400, detail="Season does not use bracket format")
+        raise bad_request("Season does not use bracket format")
 
     format_type = first_match.schedule_format
     total_rounds = compute_total_rounds(matches)
@@ -371,7 +304,7 @@ async def get_bracket(
             team_ids.add(match.team_b_id)
 
     for match in matches:
-        match_data = await match_to_response(match, db, total_rounds)
+        match_data = await build_match_response(match, db, total_rounds)
 
         if match.bracket_round == 0:
             grand_finals.append(match_data)
@@ -440,9 +373,9 @@ async def get_match(
     match = result.scalar_one_or_none()
 
     if not match:
-        raise HTTPException(status_code=404, detail="Match not found")
+        raise match_not_found(match_id)
 
-    return await match_to_response(match, db)
+    return await build_match_response(match, db)
 
 
 @router.post("/{match_id}/result", response_model=Match)
@@ -459,22 +392,22 @@ async def record_result(
     match = match_result.scalar_one_or_none()
 
     if not match:
-        raise HTTPException(status_code=404, detail="Match not found")
+        raise match_not_found(match_id)
 
     # Validate teams are set
     if not match.team_a_id or not match.team_b_id:
-        raise HTTPException(status_code=400, detail="Cannot record result for match with pending teams")
+        raise bad_request("Cannot record result for match with pending teams")
 
     # Validate winner is one of the teams
     if result.winner_id and result.winner_id not in [match.team_a_id, match.team_b_id]:
-        raise HTTPException(status_code=400, detail="Winner must be one of the match teams")
+        raise bad_request("Winner must be one of the match teams")
 
     if result.is_tie and result.winner_id:
-        raise HTTPException(status_code=400, detail="Cannot have both a tie and a winner")
+        raise bad_request("Cannot have both a tie and a winner")
 
     # Bracket matches don't allow ties
     if result.is_tie and match.schedule_format in ['single_elimination', 'double_elimination']:
-        raise HTTPException(status_code=400, detail="Bracket matches cannot end in a tie")
+        raise bad_request("Bracket matches cannot end in a tie")
 
     # Update match
     match.winner_id = result.winner_id
@@ -520,4 +453,4 @@ async def record_result(
     all_matches = all_matches_result.scalars().all()
     total_rounds = compute_total_rounds(all_matches)
 
-    return await match_to_response(match, db, total_rounds)
+    return await build_match_response(match, db, total_rounds)

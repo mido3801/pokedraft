@@ -1,12 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from uuid import UUID
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import get_current_user_optional
+from app.core.errors import season_not_found, not_league_member
+from app.core.auth import check_league_membership
 from app.models.season import Season as SeasonModel
-from app.models.league import League as LeagueModel, LeagueMembership
+from app.models.league import League as LeagueModel
 from app.models.team import Team as TeamModel
 from app.models.draft import Draft as DraftModel
 from app.models.user import User
@@ -29,24 +31,18 @@ async def get_season(
     row = result.one_or_none()
 
     if not row:
-        raise HTTPException(status_code=404, detail="Season not found")
+        raise season_not_found(season_id)
 
     season, league = row
 
     # Check access - must be a member of the league or league must be public
     if current_user:
-        membership_result = await db.execute(
-            select(LeagueMembership)
-            .where(LeagueMembership.league_id == league.id)
-            .where(LeagueMembership.user_id == current_user.id)
-            .where(LeagueMembership.is_active == True)
-        )
-        is_member = membership_result.scalar_one_or_none() is not None
+        is_member = await check_league_membership(league.id, current_user, db)
     else:
         is_member = False
 
     if not is_member and not league.is_public:
-        raise HTTPException(status_code=403, detail="Not authorized to view this season")
+        raise not_league_member()
 
     # Get team count
     team_count_result = await db.execute(
@@ -62,6 +58,9 @@ async def get_season(
     )
     draft = draft_result.scalar_one_or_none()
 
+    # Check if user is the league owner
+    is_owner = current_user is not None and league.owner_id == current_user.id
+
     return {
         "id": season.id,
         "league_id": season.league_id,
@@ -75,4 +74,6 @@ async def get_season(
         "created_at": season.created_at,
         "team_count": team_count,
         "draft_id": str(draft) if draft else None,
+        "is_owner": is_owner,
+        "league_settings": league.settings,
     }
