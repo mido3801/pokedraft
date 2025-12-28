@@ -127,7 +127,7 @@ export default function TradeProposalModal({
             {/* Your Pokemon */}
             <div>
               <h3 className="text-sm font-medium text-gray-700 mb-3">
-                Your Pokemon (select to offer)
+                Your Pokémon (select to offer)
               </h3>
               {myTeam.pokemon && myTeam.pokemon.length > 0 ? (
                 <div className="space-y-2 max-h-64 overflow-y-auto border rounded-lg p-2">
@@ -168,12 +168,12 @@ export default function TradeProposalModal({
                 </div>
               ) : (
                 <p className="text-sm text-gray-500 p-4 border rounded-lg">
-                  You have no Pokemon to trade.
+                  You have no Pokémon to trade.
                 </p>
               )}
               {selectedMyPokemon.length > 0 && (
                 <p className="text-sm text-blue-600 mt-2">
-                  {selectedMyPokemon.length} Pokemon selected
+                  {selectedMyPokemon.length} Pokémon selected
                 </p>
               )}
             </div>
@@ -181,7 +181,7 @@ export default function TradeProposalModal({
             {/* Their Pokemon */}
             <div>
               <h3 className="text-sm font-medium text-gray-700 mb-3">
-                Their Pokemon (select to request)
+                Their Pokémon (select to request)
               </h3>
               {recipientTeam ? (
                 recipientTeam.pokemon && recipientTeam.pokemon.length > 0 ? (
@@ -223,17 +223,17 @@ export default function TradeProposalModal({
                   </div>
                 ) : (
                   <p className="text-sm text-gray-500 p-4 border rounded-lg">
-                    This team has no Pokemon.
+                    This team has no Pokémon.
                   </p>
                 )
               ) : (
                 <p className="text-sm text-gray-500 p-4 border rounded-lg">
-                  Select a team to see their Pokemon.
+                  Select a team to see their Pokémon.
                 </p>
               )}
               {selectedTheirPokemon.length > 0 && (
                 <p className="text-sm text-green-600 mt-2">
-                  {selectedTheirPokemon.length} Pokemon selected
+                  {selectedTheirPokemon.length} Pokémon selected
                 </p>
               )}
             </div>

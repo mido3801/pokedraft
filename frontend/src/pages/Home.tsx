@@ -39,13 +39,13 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-medium mb-6">
             <Sparkles className="w-4 h-4" />
-            The ultimate Pokemon draft experience
+            The ultimate Pokémon draft experience
           </div>
           <h1 className="text-5xl md:text-6xl font-extrabold mb-6 tracking-tight">
-            Pokemon Draft League
+            Pokémon Draft League
           </h1>
           <p className="text-xl md:text-2xl mb-10 max-w-2xl mx-auto text-white/90 leading-relaxed">
-            Create and manage Pokemon draft leagues with friends. Draft your team,
+            Create and manage Pokémon draft leagues with friends. Draft your team,
             compete in matches, and climb the standings.
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-4">
@@ -83,7 +83,7 @@ export default function Home() {
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-gray-900 mb-4">Everything You Need</h2>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              A complete platform for running Pokemon draft leagues, from casual drafts to competitive seasons.
+              A complete platform for running Pokémon draft leagues, from casual drafts to competitive seasons.
             </p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -121,7 +121,7 @@ export default function Home() {
               icon={<Download className="w-7 h-7" />}
               color="bg-type-grass"
               title="Team Export"
-              description="Export your team directly to Pokemon Showdown format."
+              description="Export your team directly to Pokémon Showdown format."
             />
           </div>
         </div>
@@ -139,7 +139,7 @@ export default function Home() {
               number={1}
               icon={<Settings className="w-6 h-6" />}
               title="Create a Draft"
-              description="Configure your draft format, roster size, and Pokemon pool."
+              description="Configure your draft format, roster size, and Pokémon pool."
               color="bg-pokemon-blue"
             />
             <Step
@@ -153,7 +153,7 @@ export default function Home() {
               number={3}
               icon={<Play className="w-6 h-6" />}
               title="Draft!"
-              description="Take turns picking Pokemon in real-time."
+              description="Take turns picking Pokémon in real-time."
               color="bg-pokemon-green"
             />
           </div>

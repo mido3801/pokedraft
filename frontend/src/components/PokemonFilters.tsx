@@ -62,7 +62,7 @@ export default function PokemonFilters({ filters, onChange }: PokemonFiltersProp
         onClick={() => setIsExpanded(!isExpanded)}
         className="w-full flex items-center justify-between p-4 hover:bg-gray-50"
       >
-        <h3 className="font-semibold text-gray-900">Pokemon Filters</h3>
+        <h3 className="font-semibold text-gray-900">Pokémon Filters</h3>
         <svg
           className={`w-5 h-5 text-gray-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
           fill="none"
@@ -142,7 +142,7 @@ export default function PokemonFilters({ filters, onChange }: PokemonFiltersProp
 
           {/* Legendary/Mythical Toggles */}
           <div>
-            <label className="text-sm font-medium text-gray-700 mb-2 block">Special Pokemon</label>
+            <label className="text-sm font-medium text-gray-700 mb-2 block">Special Pokémon</label>
             <div className="flex flex-wrap gap-4">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -188,7 +188,7 @@ export default function PokemonFilters({ filters, onChange }: PokemonFiltersProp
             <p className="text-xs text-gray-500 mb-2">
               {filters.types.length === 0
                 ? 'All types included. Select types to filter.'
-                : 'Only Pokemon with selected types will be included.'
+                : 'Only Pokémon with selected types will be included.'
               }
             </p>
             <div className="flex flex-wrap gap-1.5">

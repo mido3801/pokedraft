@@ -175,7 +175,7 @@ function PresetItem({
         {selected && <Check className="w-4 h-4 text-purple-600" />}
       </div>
       <div className="flex items-center gap-2 mt-1 text-sm text-gray-500">
-        <span>{preset.pokemon_count} Pokemon</span>
+        <span>{preset.pokemon_count} Pokémon</span>
         {preset.creator_name && (
           <span>by {preset.creator_name}</span>
         )}

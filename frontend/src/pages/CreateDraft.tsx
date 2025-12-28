@@ -72,7 +72,7 @@ export default function CreateDraft() {
         setAllPokemon(response.pokemon)
       } catch (err) {
         console.error('Failed to load Pokemon:', err)
-        setError('Failed to load Pokemon data')
+        setError('Failed to load Pokémon data')
       } finally {
         setIsLoadingPokemon(false)
       }
@@ -184,7 +184,7 @@ export default function CreateDraft() {
     // Validation for point cap mode (NOT auction - auction doesn't need point values)
     if (formData.format !== 'auction' && formData.budgetEnabled && budgetStats) {
       if (budgetStats.withPoints === 0) {
-        setError('You must assign point values to at least one Pokemon when point cap is enabled.')
+        setError('You must assign point values to at least one Pokémon when point cap is enabled.')
         return
       }
       if (budgetStats.withoutPoints > 0) {
@@ -405,7 +405,7 @@ export default function CreateDraft() {
               <p className="text-sm text-gray-500 mt-1">
                 {formData.format === 'snake' && 'Pick order reverses each round (1→8, 8→1, 1→8...)'}
                 {formData.format === 'linear' && 'Same pick order every round (1→8, 1→8...)'}
-                {formData.format === 'auction' && 'Pokemon are nominated and teams bid. Highest bidder wins.'}
+                {formData.format === 'auction' && 'Pokémon are nominated and teams bid. Highest bidder wins.'}
               </p>
             </div>
 
@@ -467,7 +467,7 @@ export default function CreateDraft() {
                       max={300}
                       disabled={isLoading}
                     />
-                    <p className="text-xs text-gray-500 mt-1">Time to nominate a Pokemon</p>
+                    <p className="text-xs text-gray-500 mt-1">Time to nominate a Pokémon</p>
                   </div>
 
                   <div>
@@ -567,7 +567,7 @@ export default function CreateDraft() {
         )}
 
         <div className="card">
-          <h2 className="text-lg font-semibold mb-4">Pokemon Pool</h2>
+          <h2 className="text-lg font-semibold mb-4">Pokémon Pool</h2>
 
           {/* Template Selection */}
           <div className="mb-4">
@@ -627,7 +627,7 @@ export default function CreateDraft() {
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
-            {showPokemonPool ? 'Hide' : 'Show'} Pokemon Pool Customization
+            {showPokemonPool ? 'Hide' : 'Show'} Pokémon Pool Customization
           </button>
 
           {showPokemonPool && (
@@ -640,7 +640,7 @@ export default function CreateDraft() {
 
               {/* Pokemon Box */}
               <div className="mt-4">
-                <h3 className="text-sm font-medium text-gray-700 mb-2">Pokemon Pool Preview</h3>
+                <h3 className="text-sm font-medium text-gray-700 mb-2">Pokémon Pool Preview</h3>
                 <PokemonBox
                   pokemon={allPokemon}
                   filters={filters}

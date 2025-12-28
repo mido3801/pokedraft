@@ -81,7 +81,7 @@ export default function TradeCard({
         </div>
       )
     }
-    return <p className="text-sm text-gray-500">{fallbackCount} Pokemon</p>
+    return <p className="text-sm text-gray-500">{fallbackCount} Pokémon</p>
   }
 
   return (
@@ -143,7 +143,7 @@ export default function TradeCard({
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-500">{trade.recipient_pokemon.length} Pokemon</p>
+              <p className="text-sm text-gray-500">{trade.recipient_pokemon.length} Pokémon</p>
             )}
           </div>
         </div>

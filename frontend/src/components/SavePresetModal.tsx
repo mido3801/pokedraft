@@ -82,7 +82,7 @@ export default function SavePresetModal({
     }
 
     if (Object.keys(pool).length === 0) {
-      setError('No Pokemon in pool to save')
+      setError('No Pokémon in pool to save')
       return
     }
 
@@ -119,9 +119,9 @@ export default function SavePresetModal({
           )}
 
           <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-600">
-            <p>This preset will save <strong>{filteredCount}</strong> Pokemon.</p>
+            <p>This preset will save <strong>{filteredCount}</strong> Pokémon.</p>
             {pointsCount > 0 && (
-              <p className="mt-1">{pointsCount} Pokemon have point values assigned.</p>
+              <p className="mt-1">{pointsCount} Pokémon have point values assigned.</p>
             )}
           </div>
 

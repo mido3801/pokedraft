@@ -129,7 +129,7 @@ export default function PointsManager({
           </span>
           <span className="text-gray-400"> / </span>
           <span>{stats.total}</span>
-          <span className="text-gray-500 ml-1">Pokemon have point values</span>
+          <span className="text-gray-500 ml-1">Pokémon have point values</span>
         </span>
         {stats.withoutPoints > 0 && (
           <span className="text-amber-600 font-medium">
@@ -224,7 +224,7 @@ export default function PointsManager({
       {/* Instructions */}
       <div className="text-xs text-gray-500 space-y-1">
         <p><strong>CSV Format:</strong> Download the template, fill in the "points" column, then upload.</p>
-        <p><strong>Inline Editing:</strong> Click on a Pokemon in the grid below to set its point value.</p>
+        <p><strong>Inline Editing:</strong> Click on a Pokémon in the grid below to set its point value.</p>
       </div>
     </div>
   )

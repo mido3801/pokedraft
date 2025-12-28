@@ -457,7 +457,7 @@ export default function DraftRoom() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search Pokemon..."
+                placeholder="Search Pokémon..."
                 className="input flex-1"
               />
               <select
@@ -515,7 +515,7 @@ export default function DraftRoom() {
                     onChange={(e) => setLegendaryFilter(e.target.value as 'all' | 'legendary' | 'mythical' | 'regular')}
                     className="input w-28 text-sm py-2"
                   >
-                    <option value="all">All Pokemon</option>
+                    <option value="all">All Pokémon</option>
                     <option value="legendary">Legendary</option>
                     <option value="mythical">Mythical</option>
                     <option value="regular">Regular</option>

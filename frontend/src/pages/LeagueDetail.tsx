@@ -302,7 +302,7 @@ export default function LeagueDetail() {
               </div>
               <div className="flex justify-between">
                 <dt className="text-gray-500">Roster Size</dt>
-                <dd className="font-medium">{league.settings.roster_size} Pokemon</dd>
+                <dd className="font-medium">{league.settings.roster_size} Pokémon</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-gray-500">Timer</dt>

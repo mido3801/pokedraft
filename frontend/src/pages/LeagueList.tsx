@@ -108,7 +108,7 @@ export default function LeagueList() {
               </div>
               <div>
                 <h1 className="text-3xl font-bold text-gray-900">My Leagues</h1>
-                <p className="text-gray-600 mt-1">Manage your Pokemon draft leagues</p>
+                <p className="text-gray-600 mt-1">Manage your Pokémon draft leagues</p>
               </div>
             </div>
             <button
@@ -219,7 +219,7 @@ export default function LeagueList() {
 
                 <h2 className="text-2xl font-bold text-center mb-2">Create League</h2>
                 <p className="text-gray-500 text-center mb-6">
-                  Set up your Pokemon draft league
+                  Set up your Pokémon draft league
                 </p>
 
                 {/* Error Message */}

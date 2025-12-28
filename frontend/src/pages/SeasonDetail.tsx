@@ -514,7 +514,7 @@ export default function SeasonDetail() {
                 <p className="text-xs text-gray-500 mt-1">
                   {draftForm.format === 'snake' && 'Pick order reverses each round (1→8, 8→1, 1→8...)'}
                   {draftForm.format === 'linear' && 'Same pick order every round (1→8, 1→8...)'}
-                  {draftForm.format === 'auction' && 'Pokemon are nominated and teams bid. Highest bidder wins.'}
+                  {draftForm.format === 'auction' && 'Pokémon are nominated and teams bid. Highest bidder wins.'}
                 </p>
               </div>
 
@@ -652,7 +652,7 @@ export default function SeasonDetail() {
                   >
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
-                  {showFilters ? 'Hide' : 'Show'} Pokemon Pool Filters
+                  {showFilters ? 'Hide' : 'Show'} Pokémon Pool Filters
                 </button>
 
                 {showFilters && (
@@ -881,7 +881,7 @@ export default function SeasonDetail() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500">No Pokemon yet</p>
+                  <p className="text-sm text-gray-500">No Pokémon yet</p>
                 )}
               </div>
             ))
