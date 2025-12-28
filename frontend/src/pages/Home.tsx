@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import {
@@ -14,8 +15,52 @@ import {
   Sparkles,
 } from 'lucide-react'
 
+const pokemonQuotes = [
+  "The important thing is not how long you live... It's what you accomplish with your life.",
+  "Strong Pokémon. Weak Pokémon. That is only the selfish perception of people.",
+  "There's no sense in going out of your way to get somebody to like you.",
+  "I will show you that my love for my friends permeates every cell in my body.",
+  "Make your wonderful dream a reality, and it will become your truth.",
+  "We do have a lot in common. The same Earth, the same air, the same sky.",
+  "Take charge of your destiny.",
+  "Even if we don't understand each other, that's not a reason to reject each other.",
+  "I'm going to become the world's greatest Pokémon Master!",
+  "The world is waiting for you. Explore it.",
+  "When every life meets another life, something will be born.",
+  "Do you want to know what really matters? It's the courage to do what's right.",
+  "Everybody makes a wrong turn once in a while.",
+  "You see, sometimes friends have to go away, but a part of them stays behind with you.",
+  "It's more important to master the cards you're holding than to complain about the ones your opponent was dealt.",
+  "The bonds you share with your Pokémon are the true source of strength.",
+  "We will meet again someday, won't we?",
+  "A caterpie may change into a butterfree, but the heart that beats inside remains the same.",
+  "Having a Pokemon journey is about experiencing lots of different things.",
+  "Even the bravest Trainers know when to take their Pokémon and run!",
+  "Some trainers have no Pokemon spirit!",
+  "There's always a way to turn any situation around.",
+  "A wild Pokémon appeared!",
+  "Gotta catch 'em all!",
+  "It's super effective!",
+  "A new adventure awaits!",
+  "Your Pokémon look ready for battle!",
+  "Time to assemble your dream team!",
+  "Your Pokémon are fighting fit!",
+  "A Pokemon Trainer is always prepared for battle!",
+  "The road to becoming Champion starts here!",
+  "What will you do next?",
+  "Trust in your Pokémon and they'll trust in you!",
+]
+
 export default function Home() {
   const { isAuthenticated } = useAuth()
+  const [quoteIndex, setQuoteIndex] = useState(0)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setQuoteIndex((prev) => (prev + 1) % pokemonQuotes.length)
+    }, 4000)
+    return () => clearInterval(interval)
+  }, [])
 
   return (
     <div className="overflow-hidden">
@@ -37,9 +82,9 @@ export default function Home() {
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
-          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-medium mb-6">
-            <Sparkles className="w-4 h-4" />
-            The ultimate Pokémon draft experience
+          <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-medium mb-6 min-h-[2.5rem] transition-opacity duration-300">
+            <Sparkles className="w-4 h-4 flex-shrink-0" />
+            <span className="text-center">{pokemonQuotes[quoteIndex]}</span>
           </div>
           <h1 className="text-5xl md:text-6xl font-extrabold mb-6 tracking-tight">
             Pokémon Draft League
