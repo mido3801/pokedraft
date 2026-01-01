@@ -72,11 +72,21 @@ class Pokemon(Base):
     weight: Mapped[int] = mapped_column(Integer)
     base_experience: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_default: Mapped[bool] = mapped_column(Boolean, default=True)
+    generation: Mapped[int] = mapped_column(Integer, index=True)
+    base_stat_total: Mapped[int] = mapped_column(Integer, index=True)
+    evolution_stage: Mapped[str] = mapped_column(String(50))
+    is_legendary: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    is_mythical: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
     species = relationship("PokemonSpecies", back_populates="pokemon")
     types = relationship("PokemonTypeLink", back_populates="pokemon", lazy="selectin")
     stats = relationship("PokemonStatValue", back_populates="pokemon", lazy="selectin")
     abilities = relationship("PokemonAbilityLink", back_populates="pokemon", lazy="selectin")
+
+    @property
+    def name(self) -> str:
+        """Return the Pokemon's name (formatted identifier)."""
+        return self.identifier.title() if self.identifier else ""
 
 
 class PokemonTypeLink(Base):

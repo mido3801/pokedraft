@@ -19,6 +19,7 @@ import {
   ChevronDown,
   ChevronUp,
   ExternalLink,
+  UserPlus,
 } from 'lucide-react'
 
 interface CreateLeagueForm {
@@ -51,10 +52,14 @@ export default function LeagueList() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showJoinModal, setShowJoinModal] = useState(false)
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false)
   const [form, setForm] = useState<CreateLeagueForm>(initialFormState)
   const [createdLeague, setCreatedLeague] = useState<League | null>(null)
   const [copied, setCopied] = useState(false)
+  const [joinCode, setJoinCode] = useState('')
+  const [joinError, setJoinError] = useState<string | null>(null)
+  const [joinSuccess, setJoinSuccess] = useState(false)
 
   const { data: leagues, isLoading } = useQuery({
     queryKey: queryKeys.leagues,
@@ -74,6 +79,24 @@ export default function LeagueList() {
     },
   })
 
+  const joinMutation = useMutation({
+    mutationFn: (code: string) => leagueService.joinLeagueByCode(code),
+    onSuccess: (league) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.leagues })
+      setJoinSuccess(true)
+      setTimeout(() => {
+        navigate(`/leagues/${league.id}`)
+      }, 1500)
+    },
+    onError: (err: Error) => {
+      if (err.message.includes('already a member')) {
+        setJoinError('You are already a member of this league')
+      } else {
+        setJoinError(err.message || 'Failed to join league. The invite code may be invalid.')
+      }
+    },
+  })
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.name.trim()) return
@@ -86,6 +109,24 @@ export default function LeagueList() {
     setCreatedLeague(null)
     setShowAdvancedSettings(false)
     createMutation.reset()
+  }
+
+  const handleJoinClose = () => {
+    setShowJoinModal(false)
+    setJoinCode('')
+    setJoinError(null)
+    setJoinSuccess(false)
+    joinMutation.reset()
+  }
+
+  const handleJoinSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!joinCode.trim()) {
+      setJoinError('Please enter an invite code')
+      return
+    }
+    setJoinError(null)
+    joinMutation.mutate(joinCode.trim())
   }
 
   const copyInviteCode = async () => {
@@ -111,13 +152,22 @@ export default function LeagueList() {
                 <p className="text-gray-600 mt-1">Manage your Pokémon draft leagues</p>
               </div>
             </div>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="btn btn-primary"
-            >
-              <Plus className="w-5 h-5" />
-              Create League
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowJoinModal(true)}
+                className="btn btn-secondary"
+              >
+                <UserPlus className="w-5 h-5" />
+                Join League
+              </button>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="btn btn-primary"
+              >
+                <Plus className="w-5 h-5" />
+                Create League
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -437,6 +487,83 @@ export default function LeagueList() {
                     <>
                       <Trophy className="w-5 h-5" />
                       Create League
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Join Modal */}
+      {showJoinModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-scale-in relative">
+            <button
+              onClick={handleJoinClose}
+              className="absolute top-4 right-4 w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+
+            {joinSuccess ? (
+              <div className="text-center">
+                <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-green-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+                  <Check className="w-8 h-8 text-white" />
+                </div>
+                <h2 className="text-2xl font-bold mb-2">Successfully Joined!</h2>
+                <p className="text-gray-500">Redirecting you to the league...</p>
+              </div>
+            ) : (
+              <form onSubmit={handleJoinSubmit}>
+                <div className="w-16 h-16 bg-gradient-to-br from-pokemon-blue to-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+                  <UserPlus className="w-8 h-8 text-white" />
+                </div>
+
+                <h2 className="text-2xl font-bold text-center mb-2">Join a League</h2>
+                <p className="text-gray-500 text-center mb-6">
+                  Enter the invite code to join an existing league
+                </p>
+
+                {joinError && (
+                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+                    {joinError}
+                  </div>
+                )}
+
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Invite Code
+                  </label>
+                  <input
+                    type="text"
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value)}
+                    placeholder="Enter invite code"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-pokemon-blue focus:border-transparent transition-all text-center text-lg tracking-wider"
+                    autoFocus
+                    disabled={joinMutation.isPending}
+                  />
+                  <p className="text-sm text-gray-500 mt-2">
+                    Get the code from a league owner or an invite link.
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={joinMutation.isPending}
+                  className="w-full btn btn-primary py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {joinMutation.isPending ? (
+                    <>
+                      <div className="loader w-5 h-5 border-2 border-white/30 border-t-white" />
+                      Joining...
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-5 h-5" />
+                      Join League
                     </>
                   )}
                 </button>

@@ -21,13 +21,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Check for existing Supabase session on mount
+    // Check for existing session on mount (Supabase or dev token)
     const initAuth = async () => {
       try {
+        // First check for Supabase session
         const session = await authService.getSession()
         if (session?.access_token) {
           authService.syncSession(session.access_token)
           const currentUser = await authService.getCurrentUser()
+          setUser(currentUser)
+          return
+        }
+
+        // Fall back to checking for stored dev token
+        const currentUser = await authService.getCurrentUser()
+        if (currentUser) {
           setUser(currentUser)
         }
       } catch (error) {

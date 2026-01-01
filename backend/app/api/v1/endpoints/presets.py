@@ -45,6 +45,7 @@ async def list_presets(
             description=preset.description,
             pokemon_count=preset.pokemon_count,
             is_public=preset.is_public,
+            has_filters=preset.pokemon_filters is not None,
             created_at=preset.created_at,
             creator_name=creator_name if preset.user_id != current_user.id else None,
         )
@@ -67,6 +68,7 @@ async def create_preset(
         name=preset.name,
         description=preset.description,
         pokemon_pool=preset.pokemon_pool,
+        pokemon_filters=preset.pokemon_filters,
         pokemon_count=len(preset.pokemon_pool),
         is_public=preset.is_public,
     )
@@ -80,6 +82,7 @@ async def create_preset(
         name=db_preset.name,
         description=db_preset.description,
         pokemon_pool=db_preset.pokemon_pool,
+        pokemon_filters=db_preset.pokemon_filters,
         pokemon_count=db_preset.pokemon_count,
         is_public=db_preset.is_public,
         created_at=db_preset.created_at,
@@ -116,6 +119,7 @@ async def get_preset(
         name=preset.name,
         description=preset.description,
         pokemon_pool=preset.pokemon_pool,
+        pokemon_filters=preset.pokemon_filters,
         pokemon_count=preset.pokemon_count,
         is_public=preset.is_public,
         created_at=preset.created_at,
@@ -155,6 +159,8 @@ async def update_preset(
             raise bad_request("Pokemon pool cannot be empty")
         preset.pokemon_pool = preset_update.pokemon_pool
         preset.pokemon_count = len(preset_update.pokemon_pool)
+    if preset_update.pokemon_filters is not None:
+        preset.pokemon_filters = preset_update.pokemon_filters
 
     await db.commit()
     await db.refresh(preset)
@@ -165,6 +171,7 @@ async def update_preset(
         name=preset.name,
         description=preset.description,
         pokemon_pool=preset.pokemon_pool,
+        pokemon_filters=preset.pokemon_filters,
         pokemon_count=preset.pokemon_count,
         is_public=preset.is_public,
         created_at=preset.created_at,

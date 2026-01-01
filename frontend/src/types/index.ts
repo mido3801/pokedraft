@@ -30,6 +30,12 @@ export interface LeagueSettings {
   budget_enabled: boolean
   budget_per_team?: number
   trade_approval_required: boolean
+  // Waiver wire settings
+  waiver_enabled?: boolean
+  waiver_approval_type?: WaiverApprovalType
+  waiver_processing_type?: WaiverProcessingType
+  waiver_max_per_week?: number
+  waiver_require_drop?: boolean
 }
 
 // Season types
@@ -377,6 +383,7 @@ export interface PoolPreset {
   name: string
   description?: string
   pokemon_pool: Record<string, PokemonPoolEntry>
+  pokemon_filters?: PokemonFilters
   pokemon_count: number
   is_public: boolean
   created_at: string
@@ -391,6 +398,7 @@ export interface PoolPresetSummary {
   description?: string
   pokemon_count: number
   is_public: boolean
+  has_filters: boolean
   created_at: string
   creator_name?: string
 }
@@ -399,6 +407,7 @@ export interface CreatePresetParams {
   name: string
   description?: string
   pokemon_pool: Record<string, unknown>
+  pokemon_filters?: PokemonFilters
   is_public: boolean
 }
 
@@ -406,6 +415,7 @@ export interface UpdatePresetParams {
   name?: string
   description?: string
   pokemon_pool?: Record<string, unknown>
+  pokemon_filters?: PokemonFilters
   is_public?: boolean
 }
 
@@ -419,4 +429,82 @@ export interface PokemonPoolEntry {
   evolution_stage?: number
   is_legendary?: boolean
   is_mythical?: boolean
+}
+
+// Waiver Wire / Free Agent types
+export type WaiverClaimStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'expired'
+export type WaiverProcessingType = 'immediate' | 'next_week'
+export type WaiverApprovalType = 'none' | 'admin' | 'league_vote'
+
+export interface WaiverClaim {
+  id: string
+  season_id: string
+  team_id: string
+  team_name?: string
+  pokemon_id: number
+  drop_pokemon_id?: string
+  pokemon_name?: string
+  pokemon_types?: string[]
+  pokemon_sprite?: string
+  drop_pokemon_name?: string
+  drop_pokemon_types?: string[]
+  status: WaiverClaimStatus
+  priority: number
+  requires_approval: boolean
+  admin_approved?: boolean
+  admin_notes?: string
+  votes_for: number
+  votes_against: number
+  votes_required?: number
+  processing_type: WaiverProcessingType
+  process_after?: string
+  week_number?: number
+  created_at: string
+  resolved_at?: string
+}
+
+export interface WaiverClaimList {
+  claims: WaiverClaim[]
+  total: number
+  pending_count: number
+}
+
+export interface FreeAgentPokemon {
+  pokemon_id: number
+  name: string
+  types: string[]
+  sprite?: string
+  base_stat_total?: number
+  generation?: number
+}
+
+export interface FreeAgentList {
+  pokemon: FreeAgentPokemon[]
+  total: number
+}
+
+export interface WaiverVote {
+  id: string
+  waiver_claim_id: string
+  user_id: string
+  vote: boolean
+  created_at: string
+}
+
+// Waiver WebSocket event types
+export type WaiverWebSocketEvent =
+  | { event: 'waiver_claim_created'; data: { claim: WaiverClaim } }
+  | { event: 'waiver_claim_cancelled'; data: { claim_id: string } }
+  | { event: 'waiver_claim_approved'; data: { claim: WaiverClaim } }
+  | { event: 'waiver_claim_rejected'; data: { claim: WaiverClaim } }
+  | { event: 'waiver_vote_cast'; data: { claim_id: string; votes_for: number; votes_against: number } }
+  | { event: 'error'; data: { message: string; code: string } }
+
+// Extended league settings with waiver options
+export interface WaiverSettings {
+  waiver_enabled: boolean
+  waiver_approval_type: WaiverApprovalType
+  waiver_processing_type: WaiverProcessingType
+  waiver_max_per_week?: number
+  waiver_require_drop: boolean
 }

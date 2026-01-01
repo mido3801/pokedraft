@@ -20,6 +20,9 @@ class PoolPresetCreate(PoolPresetBase):
     # Structure: { "pokemon_id": { "name": str, "points": int|null, "types": [...], ... } }
     pokemon_pool: dict
 
+    # Optional filter settings used to generate the pool
+    pokemon_filters: Optional[dict] = None
+
 
 class PoolPresetUpdate(BaseModel):
     """Schema for updating a preset."""
@@ -28,6 +31,7 @@ class PoolPresetUpdate(BaseModel):
     description: Optional[str] = Field(None, max_length=500)
     is_public: Optional[bool] = None
     pokemon_pool: Optional[dict] = None
+    pokemon_filters: Optional[dict] = None
 
 
 class PoolPresetResponse(PoolPresetBase):
@@ -36,6 +40,7 @@ class PoolPresetResponse(PoolPresetBase):
     id: UUID
     user_id: UUID
     pokemon_pool: dict
+    pokemon_filters: Optional[dict] = None
     pokemon_count: int
     created_at: datetime
     updated_at: datetime
@@ -54,6 +59,7 @@ class PoolPresetSummary(BaseModel):
     description: Optional[str]
     pokemon_count: int
     is_public: bool
+    has_filters: bool = False  # Whether this preset includes saved filter settings
     created_at: datetime
     creator_name: Optional[str] = None
 

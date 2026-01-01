@@ -33,7 +33,9 @@ from app.models import (
     PokemonType,
     PokemonAbility,
     PoolPreset,
+    WaiverClaim,
 )
+from app.models.waiver import WaiverClaimStatus, WaiverProcessingType
 
 fake = Faker()
 
@@ -205,14 +207,14 @@ class SeasonFactory(BaseFactory):
     async def build(
         cls,
         league_id: Optional[int] = None,
-        name: Optional[str] = None,
+        season_number: Optional[int] = None,
         status: str = "pre_draft",
         settings: Optional[dict] = None,
     ) -> Season:
         """Build a Season instance."""
         return Season(
             league_id=league_id,
-            name=name or f"Season {fake.random_int(1, 10)}",
+            season_number=season_number or fake.random_int(1, 10),
             status=status,
             settings=settings or {},
         )
@@ -309,7 +311,7 @@ class TeamFactory(BaseFactory):
         season_id: Optional[int] = None,
         user_id: Optional[int] = None,
         session_token: Optional[str] = None,
-        name: Optional[str] = None,
+        display_name: Optional[str] = None,
         draft_position: int = 1,
         budget_remaining: Optional[int] = None,
         wins: int = 0,
@@ -322,7 +324,7 @@ class TeamFactory(BaseFactory):
             season_id=season_id,
             user_id=user_id,
             session_token=session_token,
-            name=name or f"Team {fake.last_name()}",
+            display_name=display_name or f"Team {fake.last_name()}",
             draft_position=draft_position,
             budget_remaining=budget_remaining,
             wins=wins,
@@ -369,6 +371,11 @@ class PokemonFactory(BaseFactory):
         weight: int = 100,
         base_experience: Optional[int] = 100,
         is_default: bool = True,
+        generation: int = 1,
+        base_stat_total: int = 400,
+        evolution_stage: str = "unevolved",
+        is_legendary: bool = False,
+        is_mythical: bool = False,
     ) -> Pokemon:
         """Build a Pokemon instance."""
         return Pokemon(
@@ -378,6 +385,11 @@ class PokemonFactory(BaseFactory):
             weight=weight,
             base_experience=base_experience,
             is_default=is_default,
+            generation=generation,
+            base_stat_total=base_stat_total,
+            evolution_stage=evolution_stage,
+            is_legendary=is_legendary,
+            is_mythical=is_mythical,
         )
 
     @classmethod
@@ -390,14 +402,14 @@ class PokemonFactory(BaseFactory):
 
         # Extract custom parameters
         identifier = kwargs.get('identifier', fake.first_name().lower())
-        generation_id = kwargs.pop('generation_id', kwargs.pop('generation', 1))
-        is_legendary = kwargs.pop('is_legendary', False)
-        is_mythical = kwargs.pop('is_mythical', False)
+        generation = kwargs.get('generation', kwargs.get('generation_id', 1))
+        is_legendary = kwargs.get('is_legendary', False)
+        is_mythical = kwargs.get('is_mythical', False)
 
         # Create species first
         species = PokemonSpecies(
             identifier=f"{identifier}-species",
-            generation_id=generation_id,
+            generation_id=generation,
             is_legendary=is_legendary,
             is_mythical=is_mythical,
         )
@@ -407,6 +419,11 @@ class PokemonFactory(BaseFactory):
         # Create pokemon with the species
         kwargs['species_id'] = species.id
         kwargs['identifier'] = identifier
+        # Ensure generation is set
+        if 'generation' not in kwargs and 'generation_id' in kwargs:
+            kwargs['generation'] = kwargs.pop('generation_id')
+        elif 'generation' not in kwargs:
+            kwargs['generation'] = generation
 
         instance = await cls.build(**kwargs)
         db_session.add(instance)
@@ -427,13 +444,21 @@ class PokemonFactory(BaseFactory):
         from app.models import PokemonSpecies
 
         pokemon_list = []
+        evolution_stages = ["unevolved", "middle", "fully_evolved"]
+
         for i in range(count):
+            generation = (i % 9) + 1
+            is_legendary = (i % 5 == 0)
+            is_mythical = (i % 7 == 0)
+            base_stat_total = 300 + (i * 40)  # Range from 300 to ~700
+            evolution_stage = evolution_stages[i % 3]
+
             # First create the species
             species = PokemonSpecies(
                 identifier=f"testmon-species-{i+1}",
-                generation_id=(i % 9) + 1,
-                is_legendary=(i % 5 == 0),
-                is_mythical=(i % 7 == 0),
+                generation_id=generation,
+                is_legendary=is_legendary,
+                is_mythical=is_mythical,
             )
             db_session.add(species)
             await db_session.flush()
@@ -446,6 +471,11 @@ class PokemonFactory(BaseFactory):
                 height=10 + i,
                 weight=100 + (i * 10),
                 base_experience=100 + (i * 10),
+                generation=generation,
+                base_stat_total=base_stat_total,
+                evolution_stage=evolution_stage,
+                is_legendary=is_legendary,
+                is_mythical=is_mythical,
             )
             pokemon_list.append(pokemon)
         return pokemon_list
@@ -540,3 +570,95 @@ class PoolPresetFactory(BaseFactory):
             is_public=is_public,
             pool_data=pool_data or {"pool": []},
         )
+
+
+# ============================================================================
+# Waiver Claim Factory
+# ============================================================================
+
+
+class WaiverClaimFactory(BaseFactory):
+    """Factory for creating WaiverClaim instances."""
+
+    @classmethod
+    async def build(
+        cls,
+        season_id: Optional[int] = None,
+        team_id: Optional[int] = None,
+        pokemon_id: int = 25,  # Pikachu by default
+        drop_pokemon_id: Optional[int] = None,
+        status: WaiverClaimStatus = WaiverClaimStatus.PENDING,
+        priority: int = 0,
+        requires_approval: bool = False,
+        admin_approved: Optional[bool] = None,
+        admin_notes: Optional[str] = None,
+        votes_for: int = 0,
+        votes_against: int = 0,
+        votes_required: Optional[int] = None,
+        processing_type: WaiverProcessingType = WaiverProcessingType.IMMEDIATE,
+        process_after: Optional[datetime] = None,
+        week_number: Optional[int] = None,
+    ) -> WaiverClaim:
+        """Build a WaiverClaim instance."""
+        return WaiverClaim(
+            season_id=season_id,
+            team_id=team_id,
+            pokemon_id=pokemon_id,
+            drop_pokemon_id=drop_pokemon_id,
+            status=status,
+            priority=priority,
+            requires_approval=requires_approval,
+            admin_approved=admin_approved,
+            admin_notes=admin_notes,
+            votes_for=votes_for,
+            votes_against=votes_against,
+            votes_required=votes_required,
+            processing_type=processing_type,
+            process_after=process_after,
+            week_number=week_number,
+        )
+
+    @classmethod
+    async def create_for_season(
+        cls,
+        db_session: AsyncSession,
+        season: Season,
+        team: Team,
+        pokemon_id: int = 25,
+        **kwargs,
+    ) -> WaiverClaim:
+        """Create a waiver claim for a season and team."""
+        claim = await cls.create(
+            db_session,
+            season_id=season.id,
+            team_id=team.id,
+            pokemon_id=pokemon_id,
+            **kwargs,
+        )
+        return claim
+
+    @classmethod
+    async def create_with_approval(
+        cls,
+        db_session: AsyncSession,
+        season: Season,
+        team: Team,
+        pokemon_id: int = 25,
+        approval_type: str = "admin",
+        **kwargs,
+    ) -> WaiverClaim:
+        """Create a waiver claim that requires approval."""
+        votes_required = None
+        if approval_type == "league_vote":
+            votes_required = kwargs.pop("votes_required", 3)
+
+        claim = await cls.create(
+            db_session,
+            season_id=season.id,
+            team_id=team.id,
+            pokemon_id=pokemon_id,
+            requires_approval=True,
+            votes_required=votes_required,
+            **kwargs,
+        )
+        return claim

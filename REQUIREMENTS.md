@@ -298,9 +298,89 @@ PokeDraft provides users with capabilities to create and participate in Pokemon 
 
 ---
 
-### 2.7 Match and Tournament Management (MATCH)
+### 2.7 Waiver Wire / Free Agent System (WAIVER)
 
-#### 2.7.1 Match Management
+#### 2.7.1 Waiver Claim Creation
+
+**FR-WAIVER-001:** The system shall allow teams to submit waiver claims for free agent Pokemon during active seasons.
+
+**FR-WAIVER-002:** The system shall allow teams to specify a Pokemon to drop when submitting a waiver claim.
+
+**FR-WAIVER-003:** The system shall validate that the claimed Pokemon is not already owned by a team in the season.
+
+**FR-WAIVER-004:** The system shall validate that the team owns the Pokemon they are dropping (if specified).
+
+**FR-WAIVER-005:** The system shall prevent duplicate pending claims for the same Pokemon by the same team.
+
+**FR-WAIVER-006:** The system shall track waiver claims by week number for weekly limit enforcement.
+
+#### 2.7.2 League Configuration
+
+**FR-WAIVER-007:** The system shall allow league owners to enable/disable waiver wire functionality via league settings.
+
+**FR-WAIVER-008:** The system shall allow league owners to configure waiver approval type: none (auto-approve), admin approval, or league vote.
+
+**FR-WAIVER-009:** The system shall allow league owners to configure waiver processing timing: immediate or next week.
+
+**FR-WAIVER-010:** The system shall allow league owners to configure maximum waiver claims per team per week (optional limit).
+
+**FR-WAIVER-011:** The system shall allow league owners to require a drop Pokemon when claiming (optional requirement).
+
+#### 2.7.3 Approval Workflows
+
+**FR-WAIVER-012:** The system shall automatically approve and execute waiver claims when approval type is "none" and processing is "immediate".
+
+**FR-WAIVER-013:** The system shall require league owner approval for waiver claims when approval type is "admin".
+
+**FR-WAIVER-014:** The system shall allow league owners to approve or reject pending waiver claims with optional notes.
+
+**FR-WAIVER-015:** The system shall support league vote approval where members vote to approve/reject claims.
+
+**FR-WAIVER-016:** The system shall track vote counts (for and against) for league vote approval.
+
+**FR-WAIVER-017:** The system shall automatically approve claims when vote threshold is reached.
+
+**FR-WAIVER-018:** The system shall prevent duplicate votes by the same user on the same claim.
+
+#### 2.7.4 Claim Status Management
+
+**FR-WAIVER-019:** The system shall track waiver claim status: pending, approved, rejected, cancelled, expired.
+
+**FR-WAIVER-020:** The system shall allow claim owners to cancel their pending claims.
+
+**FR-WAIVER-021:** The system shall record resolved_at timestamp when claims reach final status.
+
+**FR-WAIVER-022:** The system shall record admin_approved flag and admin_notes when admin takes action.
+
+#### 2.7.5 Claim Execution
+
+**FR-WAIVER-023:** The system shall create a new DraftPick record for the claimed Pokemon when approved.
+
+**FR-WAIVER-024:** The system shall remove the dropped Pokemon from the team roster when claim is executed (if drop specified).
+
+**FR-WAIVER-025:** The system shall update team rosters immediately upon waiver claim execution.
+
+#### 2.7.6 Free Agent Pool
+
+**FR-WAIVER-026:** The system shall list all free agent Pokemon available in a season (Pokemon in pool but not owned).
+
+**FR-WAIVER-027:** The system shall display free agent Pokemon details including name, types, stats, and sprite.
+
+#### 2.7.7 Waiver Claim Listing
+
+**FR-WAIVER-028:** The system shall list all waiver claims for a season.
+
+**FR-WAIVER-029:** The system shall allow filtering waiver claims by status.
+
+**FR-WAIVER-030:** The system shall allow filtering waiver claims by team.
+
+**FR-WAIVER-031:** The system shall display pending claim count for quick status overview.
+
+---
+
+### 2.8 Match and Tournament Management (MATCH)
+
+#### 2.8.1 Match Management
 
 **FR-MATCH-001:** The system shall allow league owners to generate match schedules for seasons.
 
@@ -322,7 +402,7 @@ PokeDraft provides users with capabilities to create and participate in Pokemon 
 
 **FR-MATCH-010:** The system shall display match details including teams, result, and metadata.
 
-#### 2.7.2 Tournament Brackets
+#### 2.8.2 Tournament Brackets
 
 **FR-MATCH-011:** The system shall generate single elimination brackets for any number of teams.
 
@@ -346,7 +426,7 @@ PokeDraft provides users with capabilities to create and participate in Pokemon 
 
 **FR-MATCH-021:** The system shall identify champions when final match is complete.
 
-#### 2.7.3 Standings
+#### 2.8.3 Standings
 
 **FR-MATCH-022:** The system shall calculate season standings based on win/loss/tie records.
 
@@ -493,6 +573,20 @@ PokeDraft provides users with capabilities to create and participate in Pokemon 
 **FR-WS-022:** The system shall broadcast trade_cancelled event when trades are cancelled.
 
 **FR-WS-023:** The system shall broadcast trade_approved event when trades are admin approved.
+
+#### 2.10.3 Waiver Wire WebSocket
+
+**FR-WS-024:** The system shall provide WebSocket endpoint for season waiver wire notifications.
+
+**FR-WS-025:** The system shall broadcast waiver_claim_created event when new claims are submitted.
+
+**FR-WS-026:** The system shall broadcast waiver_claim_cancelled event when claims are cancelled.
+
+**FR-WS-027:** The system shall broadcast waiver_claim_approved event when claims are approved.
+
+**FR-WS-028:** The system shall broadcast waiver_claim_rejected event when claims are rejected.
+
+**FR-WS-029:** The system shall broadcast waiver_vote_cast event when votes are cast on claims.
 
 ---
 
@@ -956,6 +1050,8 @@ PokeDraft provides users with capabilities to create and participate in Pokemon 
 
 **IR-WS-007:** The system shall authenticate WebSocket connections before allowing event subscription.
 
+**IR-WS-008:** The system shall provide WebSocket endpoint at `/ws/waivers/{season_id}` for waiver wire notifications.
+
 ### 4.3 Authentication Provider Interface (AUTH-IF)
 
 **IR-AUTH-001:** The system shall integrate with Supabase authentication service for user management.
@@ -1041,6 +1137,10 @@ PokeDraft provides users with capabilities to create and participate in Pokemon 
 **DR-DATA-018:** The system shall persist PoolPreset records with fields: id, user_id, name, description, is_public, pool_data (JSONB), created_at, updated_at.
 
 **DR-DATA-019:** The system shall persist TeamPokemon records with fields: team_id, pokemon_id, acquired_via, acquired_at (currently unused, picks stored in DraftPick).
+
+**DR-DATA-020:** The system shall persist WaiverClaim records with fields: id, season_id, team_id, pokemon_id, drop_pokemon_id (nullable), status, priority, requires_approval, admin_approved (nullable), admin_notes (nullable), votes_for, votes_against, votes_required (nullable), processing_type, process_after (nullable), week_number (nullable), created_at, resolved_at (nullable).
+
+**DR-DATA-021:** The system shall persist WaiverVote records with fields: id, waiver_claim_id, user_id, vote, created_at.
 
 ### 5.2 Data Integrity (INTEGRITY)
 
@@ -1144,6 +1244,7 @@ PokeDraft provides users with capabilities to create and participate in Pokemon 
 | FR-DRAFT-* | Critical | Implemented | Integration Testing, Manual Testing | FR-WS-*, DR-DATA-005, DR-DATA-006, DR-DATA-007 |
 | FR-TEAM-* | High | Implemented | Integration Testing | DR-DATA-006 |
 | FR-TRADE-* | Medium | Implemented | Integration Testing, Manual Testing | FR-WS-018 to FR-WS-023, DR-DATA-008 |
+| FR-WAIVER-* | Medium | Implemented | Integration Testing, Manual Testing | FR-WS-024 to FR-WS-029, DR-DATA-020, DR-DATA-021 |
 | FR-MATCH-* | High | Implemented | Integration Testing | DR-DATA-009 |
 | FR-POKE-* | High | Implemented | Unit Testing | IR-POKE-*, DR-DATA-010 to DR-DATA-017 |
 | FR-PRESET-* | Low | Implemented | Integration Testing | DR-DATA-018 |
@@ -1204,6 +1305,10 @@ PokeDraft provides users with capabilities to create and participate in Pokemon 
 
 **Trade**: An exchange of Pokemon between two teams in an active season.
 
+**Waiver Wire / Free Agent**: A system allowing teams to claim unowned Pokemon from the draft pool during an active season, with optional approval requirements.
+
+**Waiver Claim**: A request to add a free agent Pokemon to a team's roster, optionally dropping another Pokemon.
+
 **Match**: A scheduled or completed battle between two teams.
 
 **Bracket**: A tournament structure with elimination format (single or double elimination).
@@ -1231,6 +1336,7 @@ PokeDraft provides users with capabilities to create and participate in Pokemon 
 | Version | Date | Author | Description |
 |---------|------|--------|-------------|
 | 1.0 | 2025-12-31 | System Analysis | Initial requirements specification based on existing PokeDraft functionality |
+| 1.1 | 2025-12-31 | System Analysis | Added Waiver Wire / Free Agent System requirements (FR-WAIVER-*) |
 
 ---
 

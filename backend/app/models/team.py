@@ -51,6 +51,7 @@ class Team(Base):
     user = relationship("User", back_populates="teams")
     pokemon = relationship("TeamPokemon", back_populates="team")
     draft_picks = relationship("DraftPick", back_populates="team")
+    waiver_claims = relationship("WaiverClaim", back_populates="team")
 
 
 class TeamPokemon(Base):

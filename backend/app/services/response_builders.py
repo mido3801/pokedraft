@@ -16,6 +16,7 @@ from app.models.season import Season as SeasonModel
 from app.models.team import Team as TeamModel
 from app.models.match import Match as MatchModel
 from app.models.trade import Trade as TradeModel
+from app.models.waiver import WaiverClaim as WaiverClaimModel
 from app.models.draft import DraftPick
 from app.services.pokeapi import pokeapi_service
 from app.services.bracket import get_round_name
@@ -249,4 +250,57 @@ async def build_trade_response(trade: TradeModel, db: AsyncSession) -> dict:
         "message": trade.message,
         "created_at": trade.created_at,
         "resolved_at": trade.resolved_at,
+    }
+
+
+async def build_waiver_claim_response(claim: WaiverClaimModel, db: AsyncSession) -> dict:
+    """Build a waiver claim response with team and Pokemon details."""
+    # Get team name
+    team_result = await db.execute(
+        select(TeamModel).where(TeamModel.id == claim.team_id)
+    )
+    team = team_result.scalar_one_or_none()
+
+    # Get claimed Pokemon data
+    pokemon_data = await pokeapi_service.get_pokemon(claim.pokemon_id, db)
+
+    # Get drop Pokemon data if specified
+    drop_pokemon_name = None
+    drop_pokemon_types = []
+    if claim.drop_pokemon_id:
+        drop_pick_result = await db.execute(
+            select(DraftPick).where(DraftPick.id == claim.drop_pokemon_id)
+        )
+        drop_pick = drop_pick_result.scalar_one_or_none()
+        if drop_pick:
+            drop_pokemon_data = await pokeapi_service.get_pokemon(drop_pick.pokemon_id, db)
+            if drop_pokemon_data:
+                drop_pokemon_name = drop_pokemon_data.get("name", "Unknown")
+                drop_pokemon_types = drop_pokemon_data.get("types", [])
+
+    return {
+        "id": claim.id,
+        "season_id": claim.season_id,
+        "team_id": claim.team_id,
+        "team_name": team.display_name if team else None,
+        "pokemon_id": claim.pokemon_id,
+        "drop_pokemon_id": claim.drop_pokemon_id,
+        "pokemon_name": pokemon_data.get("name", "Unknown") if pokemon_data else "Unknown",
+        "pokemon_types": pokemon_data.get("types", []) if pokemon_data else [],
+        "pokemon_sprite": pokemon_data.get("sprite") if pokemon_data else None,
+        "drop_pokemon_name": drop_pokemon_name,
+        "drop_pokemon_types": drop_pokemon_types,
+        "status": claim.status,
+        "priority": claim.priority,
+        "requires_approval": claim.requires_approval,
+        "admin_approved": claim.admin_approved,
+        "admin_notes": claim.admin_notes,
+        "votes_for": claim.votes_for,
+        "votes_against": claim.votes_against,
+        "votes_required": claim.votes_required,
+        "processing_type": claim.processing_type,
+        "process_after": claim.process_after,
+        "week_number": claim.week_number,
+        "created_at": claim.created_at,
+        "resolved_at": claim.resolved_at,
     }

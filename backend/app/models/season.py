@@ -46,3 +46,4 @@ class Season(Base):
     teams = relationship("Team", back_populates="season")
     matches = relationship("Match", back_populates="season")
     trades = relationship("Trade", back_populates="season")
+    waiver_claims = relationship("WaiverClaim", back_populates="season")

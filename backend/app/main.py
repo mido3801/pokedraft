@@ -5,6 +5,7 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.websocket.draft_handler import router as ws_router
 from app.websocket.trade_handler import router as trade_ws_router
+from app.websocket.waiver_handler import router as waiver_ws_router
 
 # Startup debug info
 print(f"[STARTUP] DEV_MODE: {settings.DEV_MODE}")
@@ -33,6 +34,7 @@ app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 # Include WebSocket routes
 app.include_router(ws_router)
 app.include_router(trade_ws_router)
+app.include_router(waiver_ws_router)
 
 
 @app.get("/health")

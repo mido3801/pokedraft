@@ -16,6 +16,7 @@ from app.models.pokemon import (
     PokemonStatValue,
     PokemonAbilityLink,
 )
+from app.models.waiver import WaiverClaim, WaiverVote
 
 __all__ = [
     "User",
@@ -37,4 +38,6 @@ __all__ = [
     "PokemonTypeLink",
     "PokemonStatValue",
     "PokemonAbilityLink",
+    "WaiverClaim",
+    "WaiverVote",
 ]

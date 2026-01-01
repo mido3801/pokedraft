@@ -72,18 +72,9 @@ def decode_supabase_token(token: str) -> Optional[dict]:
                 print("[AUTH DEBUG] No JWKS client available for ES256 token")
                 return None
 
-        # HS256 tokens use the JWT secret
-        if settings.SUPABASE_JWT_SECRET:
-            payload = jwt.decode(
-                token,
-                settings.SUPABASE_JWT_SECRET,
-                algorithms=["HS256"],
-                audience="authenticated",
-            )
-            return payload
-
+        # HS256 tokens - try multiple keys
+        # In dev mode, try SECRET_KEY first (for dev-login tokens)
         if settings.DEV_MODE:
-            # Development mode - try SECRET_KEY first (for dev tokens), then decode without verification
             try:
                 payload = jwt.decode(
                     token,
@@ -91,17 +82,27 @@ def decode_supabase_token(token: str) -> Optional[dict]:
                     algorithms=["HS256"],
                     audience="authenticated",
                 )
+                return payload
             except PyJWTError:
-                # Fallback: decode without verification for other dev scenarios
+                pass  # Try other methods
+
+        # Try Supabase JWT secret
+        if settings.SUPABASE_JWT_SECRET:
+            try:
                 payload = jwt.decode(
                     token,
-                    options={"verify_signature": False},
+                    settings.SUPABASE_JWT_SECRET,
+                    algorithms=["HS256"],
+                    audience="authenticated",
                 )
-        else:
-            # No JWT secret configured and not in dev mode
+                return payload
+            except PyJWTError:
+                pass  # Fall through to error handling
+
+        # No valid decode method worked
+        if not settings.DEV_MODE:
             print(f"[AUTH DEBUG] No SUPABASE_JWT_SECRET configured and DEV_MODE is False")
-            return None
-        return payload
+        return None
     except PyJWTError as e:
         print(f"[AUTH DEBUG] JWT decode error: {type(e).__name__}: {e}")
         # Try to decode without verification to see the token contents for debugging

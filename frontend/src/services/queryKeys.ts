@@ -16,6 +16,8 @@ export const queryKeys = {
   seasonSchedule: (seasonId: string) => ['season-schedule', seasonId] as const,
   seasonBracket: (seasonId: string) => ['season-bracket', seasonId] as const,
   seasonTrades: (seasonId: string) => ['season-trades', seasonId] as const,
+  seasonWaiverClaims: (seasonId: string) => ['season-waiver-claims', seasonId] as const,
+  seasonFreeAgents: (seasonId: string) => ['season-free-agents', seasonId] as const,
 
   // Drafts
   myDrafts: ['my-drafts'] as const,

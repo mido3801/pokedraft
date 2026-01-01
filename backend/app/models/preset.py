@@ -27,6 +27,10 @@ class PoolPreset(Base):
     # Structure: { "pokemon_id": { "name": str, "points": int|null, "types": [...], ... } }
     pokemon_pool: Mapped[dict] = mapped_column(JSONB, default=dict)
 
+    # Filter settings used to generate the pool (optional - for recreating filters)
+    # Structure matches PokemonFilters schema
+    pokemon_filters: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+
     # Pool metadata for display
     pokemon_count: Mapped[int] = mapped_column(Integer, default=0)
 

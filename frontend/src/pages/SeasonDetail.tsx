@@ -4,9 +4,10 @@ import { useState, useMemo } from 'react'
 import { teamService } from '../services/team'
 import { matchService, ScheduleFormat } from '../services/match'
 import { tradeService } from '../services/trade'
+import { waiverService } from '../services/waiver'
 import { draftService, CreateDraftParams } from '../services/draft'
 import { queryKeys } from '../services/queryKeys'
-import { Season, Match, SeedingMode, DraftFormat, PokemonFilters, LeagueSettings, DEFAULT_POKEMON_FILTERS } from '../types'
+import { Season, Match, SeedingMode, DraftFormat, PokemonFilters, LeagueSettings, DEFAULT_POKEMON_FILTERS, WaiverApprovalType } from '../types'
 import { api } from '../services/api'
 import { useSprite } from '../context/SpriteContext'
 import { useAuth } from '../context/AuthContext'
@@ -15,7 +16,10 @@ import BracketDisplay from '../components/BracketDisplay'
 import PokemonFiltersComponent from '../components/PokemonFilters'
 import TradeCard from '../components/TradeCard'
 import TradeProposalModal from '../components/TradeProposalModal'
+import WaiverClaimCard from '../components/WaiverClaimCard'
+import WaiverClaimModal from '../components/WaiverClaimModal'
 import { useTradeWebSocket } from '../hooks/useTradeWebSocket'
+import { useWaiverWebSocket } from '../hooks/useWaiverWebSocket'
 
 // Need to add a season service endpoint
 const getSeason = async (seasonId: string): Promise<Season & {
@@ -34,8 +38,9 @@ export default function SeasonDetail() {
   const queryClient = useQueryClient()
   const { getSpriteUrl } = useSprite()
   const { user } = useAuth()
-  const [activeTab, setActiveTab] = useState<'standings' | 'schedule' | 'teams' | 'trades'>('standings')
+  const [activeTab, setActiveTab] = useState<'standings' | 'schedule' | 'teams' | 'trades' | 'waivers'>('standings')
   const [showTradeModal, setShowTradeModal] = useState(false)
+  const [showWaiverModal, setShowWaiverModal] = useState(false)
   const [showScheduleModal, setShowScheduleModal] = useState(false)
   const [scheduleFormat, setScheduleFormat] = useState<ScheduleFormat>('round_robin')
   const [seedingMode, setSeedingMode] = useState<SeedingMode>('standings')
@@ -112,6 +117,18 @@ export default function SeasonDetail() {
     enabled: !!seasonId,
   })
 
+  const { data: waiverClaims } = useQuery({
+    queryKey: queryKeys.seasonWaiverClaims(seasonId!),
+    queryFn: () => waiverService.getClaims(seasonId!),
+    enabled: !!seasonId && (season?.status === 'active' || season?.status === 'completed'),
+  })
+
+  const { data: freeAgents } = useQuery({
+    queryKey: queryKeys.seasonFreeAgents(seasonId!),
+    queryFn: () => waiverService.getFreeAgents(seasonId!),
+    enabled: !!seasonId && season?.status === 'active',
+  })
+
   // Find current user's team in this season
   const myTeam = useMemo(() => {
     if (!user || !teams) return null
@@ -149,6 +166,44 @@ export default function SeasonDetail() {
     },
   })
 
+  // Waiver mutations
+  const cancelWaiverMutation = useMutation({
+    mutationFn: (claimId: string) => waiverService.cancelClaim(claimId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonWaiverClaims(seasonId!) })
+    },
+  })
+
+  const approveWaiverMutation = useMutation({
+    mutationFn: (claimId: string) => waiverService.adminAction(claimId, { action: 'approve' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonWaiverClaims(seasonId!) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonTeams(seasonId!) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonFreeAgents(seasonId!) })
+    },
+  })
+
+  const rejectWaiverMutation = useMutation({
+    mutationFn: (claimId: string) => waiverService.adminAction(claimId, { action: 'reject' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonWaiverClaims(seasonId!) })
+    },
+  })
+
+  const voteForWaiverMutation = useMutation({
+    mutationFn: (claimId: string) => waiverService.vote(claimId, { vote: 'for' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonWaiverClaims(seasonId!) })
+    },
+  })
+
+  const voteAgainstWaiverMutation = useMutation({
+    mutationFn: (claimId: string) => waiverService.vote(claimId, { vote: 'against' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonWaiverClaims(seasonId!) })
+    },
+  })
+
   // Real-time trade updates via WebSocket
   useTradeWebSocket({
     seasonId: seasonId!,
@@ -168,6 +223,29 @@ export default function SeasonDetail() {
     onTradeApproved: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.seasonTrades(seasonId!) })
       queryClient.invalidateQueries({ queryKey: queryKeys.seasonTeams(seasonId!) })
+    },
+  })
+
+  // Real-time waiver updates via WebSocket
+  useWaiverWebSocket({
+    seasonId: seasonId!,
+    enabled: !!seasonId && season?.status === 'active',
+    onClaimCreated: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonWaiverClaims(seasonId!) })
+    },
+    onClaimApproved: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonWaiverClaims(seasonId!) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonTeams(seasonId!) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonFreeAgents(seasonId!) })
+    },
+    onClaimRejected: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonWaiverClaims(seasonId!) })
+    },
+    onClaimCancelled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonWaiverClaims(seasonId!) })
+    },
+    onVoteCast: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.seasonWaiverClaims(seasonId!) })
     },
   })
 
@@ -726,7 +804,7 @@ export default function SeasonDetail() {
       {/* Tabs */}
       <div className="border-b border-gray-200 mb-6">
         <nav className="-mb-px flex space-x-8">
-          {['standings', 'schedule', 'teams', 'trades'].map((tab) => (
+          {['standings', 'schedule', 'teams', 'trades', 'waivers'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as typeof activeTab)}
@@ -966,6 +1044,91 @@ export default function SeasonDetail() {
         </div>
       )}
 
+      {activeTab === 'waivers' && (
+        <div className="space-y-6">
+          {/* Admin Approval Panel for Waivers */}
+          {season?.is_owner && season?.league_settings?.waiver_approval_type === 'admin' && (
+            (() => {
+              const pendingApprovalClaims = waiverClaims?.claims?.filter(
+                (c) => c.status === 'pending' && c.requires_approval
+              ) || []
+              if (pendingApprovalClaims.length === 0) return null
+              return (
+                <div className="card border-yellow-200 bg-yellow-50">
+                  <h2 className="text-lg font-semibold mb-4 text-yellow-800">
+                    Waiver Claims Awaiting Approval ({pendingApprovalClaims.length})
+                  </h2>
+                  <div className="space-y-4">
+                    {pendingApprovalClaims.map((claim) => (
+                      <WaiverClaimCard
+                        key={claim.id}
+                        claim={claim}
+                        currentUserTeamId={myTeam?.id}
+                        isLeagueOwner={season?.is_owner ?? false}
+                        approvalType={season?.league_settings?.waiver_approval_type as WaiverApprovalType || 'none'}
+                        onApprove={() => approveWaiverMutation.mutate(claim.id)}
+                        onReject={() => rejectWaiverMutation.mutate(claim.id)}
+                        isLoading={approveWaiverMutation.isPending || rejectWaiverMutation.isPending}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )
+            })()
+          )}
+
+          {/* Main Waivers Card */}
+          <div className="card">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold">Free Agent Claims</h2>
+              {myTeam && season?.status === 'active' && (
+                <button
+                  onClick={() => setShowWaiverModal(true)}
+                  className="btn btn-primary"
+                >
+                  Claim Free Agent
+                </button>
+              )}
+            </div>
+
+            {/* Weekly Limit Info */}
+            {season?.league_settings?.waiver_max_per_week && season.league_settings.waiver_max_per_week > 0 && (
+              <p className="text-sm text-gray-600 mb-4">
+                Weekly limit: {season.league_settings.waiver_max_per_week} claim{season.league_settings.waiver_max_per_week > 1 ? 's' : ''} per team
+              </p>
+            )}
+
+            {waiverClaims && waiverClaims.claims && waiverClaims.claims.length > 0 ? (
+              <div className="space-y-4">
+                {waiverClaims.claims.map((claim) => (
+                  <WaiverClaimCard
+                    key={claim.id}
+                    claim={claim}
+                    currentUserTeamId={myTeam?.id}
+                    isLeagueOwner={season?.is_owner ?? false}
+                    approvalType={season?.league_settings?.waiver_approval_type as WaiverApprovalType || 'none'}
+                    onCancel={() => cancelWaiverMutation.mutate(claim.id)}
+                    onApprove={() => approveWaiverMutation.mutate(claim.id)}
+                    onReject={() => rejectWaiverMutation.mutate(claim.id)}
+                    onVoteFor={() => voteForWaiverMutation.mutate(claim.id)}
+                    onVoteAgainst={() => voteAgainstWaiverMutation.mutate(claim.id)}
+                    isLoading={
+                      cancelWaiverMutation.isPending ||
+                      approveWaiverMutation.isPending ||
+                      rejectWaiverMutation.isPending ||
+                      voteForWaiverMutation.isPending ||
+                      voteAgainstWaiverMutation.isPending
+                    }
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500 text-center py-8">No waiver claims yet this season.</p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Trade Proposal Modal */}
       {showTradeModal && myTeam && teams && (
         <TradeProposalModal
@@ -974,6 +1137,18 @@ export default function SeasonDetail() {
           seasonId={seasonId!}
           myTeam={myTeam}
           otherTeams={teams.filter((t) => t.id !== myTeam.id)}
+        />
+      )}
+
+      {/* Waiver Claim Modal */}
+      {showWaiverModal && myTeam && freeAgents && (
+        <WaiverClaimModal
+          isOpen={showWaiverModal}
+          onClose={() => setShowWaiverModal(false)}
+          seasonId={seasonId!}
+          myTeam={myTeam}
+          freeAgents={freeAgents.pokemon || []}
+          processingType={season?.league_settings?.waiver_processing_type || 'immediate'}
         />
       )}
     </div>

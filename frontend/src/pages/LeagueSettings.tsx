@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { leagueService } from '../services/league'
 import { queryKeys } from '../services/queryKeys'
 import { useAuth } from '../context/AuthContext'
-import { DraftFormat } from '../types'
+import { DraftFormat, WaiverApprovalType, WaiverProcessingType } from '../types'
 
 export default function LeagueSettings() {
   const { leagueId } = useParams<{ leagueId: string }>()
@@ -22,6 +22,9 @@ export default function LeagueSettings() {
       budget_enabled: false,
       budget_per_team: 100,
       trade_approval_required: false,
+      waiver_approval_type: 'none' as WaiverApprovalType,
+      waiver_processing_type: 'immediate' as WaiverProcessingType,
+      waiver_max_per_week: 0,
     },
   })
   const [error, setError] = useState('')
@@ -45,6 +48,9 @@ export default function LeagueSettings() {
           budget_enabled: league.settings.budget_enabled,
           budget_per_team: league.settings.budget_per_team || 100,
           trade_approval_required: league.settings.trade_approval_required,
+          waiver_approval_type: league.settings.waiver_approval_type || 'none',
+          waiver_processing_type: league.settings.waiver_processing_type || 'immediate',
+          waiver_max_per_week: league.settings.waiver_max_per_week || 0,
         },
       })
     }
@@ -263,6 +269,76 @@ export default function LeagueSettings() {
             <label htmlFor="tradeApproval" className="ml-2 text-sm text-gray-700">
               Require admin approval for trades
             </label>
+          </div>
+        </div>
+
+        <div className="card">
+          <h2 className="text-lg font-semibold mb-4">Waiver Wire / Free Agency</h2>
+
+          <div className="space-y-4">
+            <div>
+              <label className="label">Approval Type</label>
+              <select
+                value={formData.settings.waiver_approval_type}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    settings: { ...formData.settings, waiver_approval_type: e.target.value as WaiverApprovalType },
+                  })
+                }
+                className="input"
+              >
+                <option value="none">No approval required</option>
+                <option value="admin">Admin approval required</option>
+                <option value="league_vote">League vote required</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                {formData.settings.waiver_approval_type === 'none' && 'Claims are processed automatically without approval.'}
+                {formData.settings.waiver_approval_type === 'admin' && 'League owner must approve each claim before it is processed.'}
+                {formData.settings.waiver_approval_type === 'league_vote' && 'Other team owners vote on claims. Majority approval required.'}
+              </p>
+            </div>
+
+            <div>
+              <label className="label">Processing Time</label>
+              <select
+                value={formData.settings.waiver_processing_type}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    settings: { ...formData.settings, waiver_processing_type: e.target.value as WaiverProcessingType },
+                  })
+                }
+                className="input"
+              >
+                <option value="immediate">Immediate</option>
+                <option value="next_week">Next Week</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                {formData.settings.waiver_processing_type === 'immediate' && 'Claims are processed immediately once approved (or instantly if no approval required).'}
+                {formData.settings.waiver_processing_type === 'next_week' && 'Claims are queued and processed at the start of the next week.'}
+              </p>
+            </div>
+
+            <div>
+              <label className="label">Max Claims Per Week (0 = unlimited)</label>
+              <input
+                type="number"
+                value={formData.settings.waiver_max_per_week}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    settings: { ...formData.settings, waiver_max_per_week: parseInt(e.target.value) || 0 },
+                  })
+                }
+                className="input"
+                min={0}
+                max={10}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Limit how many free agents each team can claim per week.
+              </p>
+            </div>
           </div>
         </div>
 

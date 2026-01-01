@@ -2,13 +2,13 @@ import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { presetService } from '../services/preset'
 import { queryKeys } from '../services/queryKeys'
-import { PoolPresetSummary, PokemonPointsMap } from '../types'
-import { Globe, Lock, Check, X } from 'lucide-react'
+import { PoolPresetSummary, PokemonPointsMap, PokemonFilters } from '../types'
+import { Globe, Lock, Check, X, Filter } from 'lucide-react'
 
 interface LoadPresetModalProps {
   isOpen: boolean
   onClose: () => void
-  onLoad: (poolData: Record<string, unknown>, points: PokemonPointsMap) => void
+  onLoad: (poolData: Record<string, unknown>, points: PokemonPointsMap, filters?: PokemonFilters) => void
 }
 
 export default function LoadPresetModal({
@@ -39,7 +39,8 @@ export default function LoadPresetModal({
         }
       }
 
-      onLoad(preset.pokemon_pool, points)
+      // Pass filters if they exist
+      onLoad(preset.pokemon_pool, points, preset.pokemon_filters)
       handleClose()
     },
     onError: (err: Error) => {
@@ -171,6 +172,12 @@ function PresetItem({
             <Lock className="w-4 h-4 text-gray-400" />
           )}
           <span className="font-medium">{preset.name}</span>
+          {preset.has_filters && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs rounded">
+              <Filter className="w-3 h-3" />
+              Filters
+            </span>
+          )}
         </div>
         {selected && <Check className="w-4 h-4 text-purple-600" />}
       </div>

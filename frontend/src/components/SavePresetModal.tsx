@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { presetService } from '../services/preset'
 import { queryKeys } from '../services/queryKeys'
-import { PokemonBoxEntry, PokemonPointsMap, PokemonFilters } from '../types'
-import { Globe, Lock, X } from 'lucide-react'
+import { PokemonBoxEntry, PokemonPointsMap, PokemonFilters, DEFAULT_POKEMON_FILTERS } from '../types'
+import { Globe, Lock, X, Filter } from 'lucide-react'
 
 interface SavePresetModalProps {
   isOpen: boolean
@@ -37,6 +37,7 @@ export default function SavePresetModal({
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [isPublic, setIsPublic] = useState(false)
+  const [saveFilters, setSaveFilters] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const createMutation = useMutation({
@@ -54,6 +55,7 @@ export default function SavePresetModal({
     setName('')
     setDescription('')
     setIsPublic(false)
+    setSaveFilters(true)
     setError(null)
     onClose()
   }
@@ -90,6 +92,7 @@ export default function SavePresetModal({
       name: name.trim(),
       description: description.trim() || undefined,
       pokemon_pool: pool,
+      pokemon_filters: saveFilters ? filters : undefined,
       is_public: isPublic,
     })
   }
@@ -151,6 +154,33 @@ export default function SavePresetModal({
               rows={2}
               maxLength={500}
             />
+          </div>
+
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div className="flex items-center gap-2">
+              <Filter className={`w-5 h-5 ${saveFilters ? 'text-purple-500' : 'text-gray-400'}`} />
+              <div>
+                <p className="font-medium text-gray-900">
+                  Save Filter Settings
+                </p>
+                <p className="text-xs text-gray-500">
+                  {saveFilters ? 'Filters can be restored when loading' : 'Only Pokemon list will be saved'}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSaveFilters(!saveFilters)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                saveFilters ? 'bg-purple-500' : 'bg-gray-200'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  saveFilters ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
           </div>
 
           <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">

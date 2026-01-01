@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -14,6 +14,13 @@ class LeagueSettings(BaseModel):
     budget_enabled: bool = False
     budget_per_team: Optional[int] = None
     trade_approval_required: bool = False
+
+    # Waiver wire / Free agent settings
+    waiver_enabled: bool = False
+    waiver_approval_type: Literal["none", "admin", "league_vote"] = "none"
+    waiver_processing_type: Literal["immediate", "next_week"] = "immediate"
+    waiver_max_per_week: Optional[int] = None  # None = unlimited
+    waiver_require_drop: bool = False  # Must drop a Pokemon when claiming
 
 
 class LeagueBase(BaseModel):

@@ -125,6 +125,11 @@ def pokemon_not_found(pokemon_id: Any = None) -> NotFoundError:
     return NotFoundError("Pokemon", pokemon_id)
 
 
+def waiver_claim_not_found(claim_id: Any = None) -> NotFoundError:
+    """Waiver claim not found error."""
+    return NotFoundError("Waiver claim", claim_id)
+
+
 # Authorization error helpers
 def not_league_member() -> ForbiddenError:
     """User is not a league member error."""

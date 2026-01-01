@@ -76,7 +76,7 @@ async def test_create_anonymous_draft(db_session):
     # Assert
     assert draft.id is not None
     assert draft.season_id is None
-    assert draft.creator_token is not None
+    assert draft.session_token is not None
     assert draft.rejoin_code is not None
 
 
@@ -398,8 +398,8 @@ async def test_draft_completion_when_roster_filled(db_session):
         roster_size=2,
     )
     team = await TeamFactory.create_for_draft(db_session, draft)
-    pokemon1 = await PokemonFactory.create(db_session, name="Pokemon1")
-    pokemon2 = await PokemonFactory.create(db_session, name="Pokemon2")
+    pokemon1 = await PokemonFactory.create(db_session, identifier="Pokemon1")
+    pokemon2 = await PokemonFactory.create(db_session, identifier="Pokemon2")
 
     # Act - Make picks
     pick1 = DraftPick(

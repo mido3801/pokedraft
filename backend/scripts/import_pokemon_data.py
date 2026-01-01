@@ -190,31 +190,77 @@ def import_pokemon(session, csv_path: Path) -> None:
     """Import Pokemon (main forms only by default)."""
     print("\nImporting Pokemon...")
     rows = read_csv(csv_path, "pokemon.csv")
+    species_rows = read_csv(csv_path, "pokemon_species.csv")
+    stats_rows = read_csv(csv_path, "pokemon_stats.csv")
+
+    # Build species lookup: species_id -> {generation_id, is_legendary, is_mythical, evolves_from}
+    species_map = {}
+    for sp in species_rows:
+        species_map[int(sp["id"])] = {
+            "generation_id": int(sp["generation_id"]),
+            "is_legendary": parse_bool(sp["is_legendary"]),
+            "is_mythical": parse_bool(sp["is_mythical"]),
+            "evolves_from": parse_int_or_none(sp["evolves_from_species_id"]),
+        }
+
+    # Build stats lookup: pokemon_id -> base_stat_total (sum of stats 1-6)
+    stats_map = {}
+    for st in stats_rows:
+        pokemon_id = int(st["pokemon_id"])
+        stat_id = int(st["stat_id"])
+        if stat_id <= 6:  # Only main battle stats
+            stats_map[pokemon_id] = stats_map.get(pokemon_id, 0) + int(st["base_stat"])
+
+    # Determine evolution stage based on evolves_from chain
+    def get_evolution_stage(species_id: int) -> str:
+        sp = species_map.get(species_id)
+        if not sp or not sp["evolves_from"]:
+            return "basic"
+        parent = species_map.get(sp["evolves_from"])
+        if not parent or not parent["evolves_from"]:
+            return "stage1"
+        return "stage2"
 
     # Filter to default forms only (is_default = 1)
     default_forms = [r for r in rows if parse_bool(r["is_default"])]
 
     for row in default_forms:
+        pokemon_id = int(row["id"])
+        species_id = int(row["species_id"])
+        sp = species_map.get(species_id, {})
+
         session.execute(
             text("""
-                INSERT INTO pokemon_data (id, identifier, species_id, height, weight, base_experience, is_default)
-                VALUES (:id, :identifier, :species_id, :height, :weight, :base_experience, :is_default)
+                INSERT INTO pokemon_data (id, identifier, species_id, height, weight, base_experience, is_default,
+                                          generation, base_stat_total, evolution_stage, is_legendary, is_mythical)
+                VALUES (:id, :identifier, :species_id, :height, :weight, :base_experience, :is_default,
+                        :generation, :base_stat_total, :evolution_stage, :is_legendary, :is_mythical)
                 ON CONFLICT (id) DO UPDATE SET
                     identifier = EXCLUDED.identifier,
                     species_id = EXCLUDED.species_id,
                     height = EXCLUDED.height,
                     weight = EXCLUDED.weight,
                     base_experience = EXCLUDED.base_experience,
-                    is_default = EXCLUDED.is_default
+                    is_default = EXCLUDED.is_default,
+                    generation = EXCLUDED.generation,
+                    base_stat_total = EXCLUDED.base_stat_total,
+                    evolution_stage = EXCLUDED.evolution_stage,
+                    is_legendary = EXCLUDED.is_legendary,
+                    is_mythical = EXCLUDED.is_mythical
             """),
             {
-                "id": int(row["id"]),
+                "id": pokemon_id,
                 "identifier": row["identifier"],
-                "species_id": int(row["species_id"]),
+                "species_id": species_id,
                 "height": int(row["height"]),
                 "weight": int(row["weight"]),
                 "base_experience": parse_int_or_none(row["base_experience"]),
                 "is_default": True,
+                "generation": sp.get("generation_id", 1),
+                "base_stat_total": stats_map.get(pokemon_id, 0),
+                "evolution_stage": get_evolution_stage(species_id),
+                "is_legendary": sp.get("is_legendary", False),
+                "is_mythical": sp.get("is_mythical", False),
             }
         )
 
