@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter
+
+from app.core.errors import not_found
 
 router = APIRouter()
 
@@ -59,8 +61,5 @@ async def list_templates():
 async def get_template(template_id: str):
     """Get template details including Pokemon pool configuration."""
     if template_id not in TEMPLATES:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Template '{template_id}' not found",
-        )
+        raise not_found("Template", template_id)
     return TEMPLATES[template_id]

@@ -32,6 +32,7 @@ class League(Base):
     owner = relationship("User", back_populates="owned_leagues")
     members = relationship("LeagueMembership", back_populates="league")
     seasons = relationship("Season", back_populates="league")
+    discord_configs = relationship("DiscordGuildConfig", back_populates="league")
 
 
 class LeagueMembership(Base):

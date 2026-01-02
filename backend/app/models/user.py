@@ -34,3 +34,6 @@ class User(Base):
     teams = relationship("Team", back_populates="user")
     created_drafts = relationship("Draft", back_populates="creator")
     pool_presets = relationship("PoolPreset", back_populates="user")
+    notification_settings = relationship(
+        "UserNotificationSettings", back_populates="user", uselist=False
+    )

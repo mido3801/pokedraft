@@ -20,11 +20,15 @@ export const queryKeys = {
   seasonFreeAgents: (seasonId: string) => ['season-free-agents', seasonId] as const,
 
   // Drafts
+  draft: (draftId: string) => ['draft', draftId] as const,
   myDrafts: ['my-drafts'] as const,
 
   // Presets
   presets: ['presets'] as const,
   preset: (presetId: string) => ['preset', presetId] as const,
+
+  // Pokemon
+  pokemonBox: (spriteStyle: string) => ['pokemon-box', spriteStyle] as const,
 } as const
 
 // Type helper for query key values

@@ -17,6 +17,12 @@ from app.models.pokemon import (
     PokemonAbilityLink,
 )
 from app.models.waiver import WaiverClaim, WaiverVote
+from app.models.discord import (
+    DiscordGuildConfig,
+    UserNotificationSettings,
+    ScheduledReminder,
+    ReminderType,
+)
 
 __all__ = [
     "User",
@@ -40,4 +46,8 @@ __all__ = [
     "PokemonAbilityLink",
     "WaiverClaim",
     "WaiverVote",
+    "DiscordGuildConfig",
+    "UserNotificationSettings",
+    "ScheduledReminder",
+    "ReminderType",
 ]

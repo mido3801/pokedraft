@@ -105,7 +105,12 @@ export default function Layout() {
               {isAuthenticated ? (
                 <>
                   {import.meta.env.DEV && <DevUserSwitcher />}
-                  <span className="text-sm">{user?.display_name}</span>
+                  <Link
+                    to="/settings"
+                    className="text-sm hover:text-gray-200 hover:underline"
+                  >
+                    {user?.display_name}
+                  </Link>
                   <button
                     onClick={logout}
                     className="px-3 py-1 rounded bg-white/10 hover:bg-white/20"

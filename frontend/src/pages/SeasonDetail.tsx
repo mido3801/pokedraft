@@ -123,10 +123,11 @@ export default function SeasonDetail() {
     enabled: !!seasonId && (season?.status === 'active' || season?.status === 'completed'),
   })
 
-  const { data: freeAgents } = useQuery({
-    queryKey: queryKeys.seasonFreeAgents(seasonId!),
-    queryFn: () => waiverService.getFreeAgents(seasonId!),
-    enabled: !!seasonId && season?.status === 'active',
+  // Fetch draft data to get roster size limit
+  const { data: draft } = useQuery({
+    queryKey: queryKeys.draft(season?.draft_id || ''),
+    queryFn: () => draftService.getDraft(season!.draft_id!),
+    enabled: !!season?.draft_id,
   })
 
   // Find current user's team in this season
@@ -134,6 +135,13 @@ export default function SeasonDetail() {
     if (!user || !teams) return null
     return teams.find((t) => t.user_id === user.id) || null
   }, [user, teams])
+
+  // Calculate if a drop is required for waiver claims
+  const requireDrop = useMemo(() => {
+    if (!myTeam || !draft) return false
+    const currentRosterSize = myTeam.pokemon?.length || 0
+    return currentRosterSize >= draft.roster_size
+  }, [myTeam, draft])
 
   // Trade mutations
   const acceptTradeMutation = useMutation({
@@ -1084,15 +1092,24 @@ export default function SeasonDetail() {
               {myTeam && season?.status === 'active' && (
                 <button
                   onClick={() => setShowWaiverModal(true)}
-                  className="btn btn-primary"
+                  disabled={!season?.league_settings?.waiver_enabled}
+                  className={`btn ${season?.league_settings?.waiver_enabled ? 'btn-primary' : 'btn-secondary opacity-50 cursor-not-allowed'}`}
+                  title={!season?.league_settings?.waiver_enabled ? 'Waiver wire is disabled for this league' : undefined}
                 >
                   Claim Free Agent
                 </button>
               )}
             </div>
 
+            {/* Waivers Disabled Notice */}
+            {!season?.league_settings?.waiver_enabled && (
+              <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg mb-4">
+                Waiver wire is disabled for this league. The league owner can enable it in league settings.
+              </div>
+            )}
+
             {/* Weekly Limit Info */}
-            {season?.league_settings?.waiver_max_per_week && season.league_settings.waiver_max_per_week > 0 && (
+            {season?.league_settings?.waiver_enabled && season?.league_settings?.waiver_max_per_week && season.league_settings.waiver_max_per_week > 0 && (
               <p className="text-sm text-gray-600 mb-4">
                 Weekly limit: {season.league_settings.waiver_max_per_week} claim{season.league_settings.waiver_max_per_week > 1 ? 's' : ''} per team
               </p>
@@ -1141,14 +1158,13 @@ export default function SeasonDetail() {
       )}
 
       {/* Waiver Claim Modal */}
-      {showWaiverModal && myTeam && freeAgents && (
+      {showWaiverModal && myTeam && (
         <WaiverClaimModal
           isOpen={showWaiverModal}
           onClose={() => setShowWaiverModal(false)}
           seasonId={seasonId!}
           myTeam={myTeam}
-          freeAgents={freeAgents.pokemon || []}
-          processingType={season?.league_settings?.waiver_processing_type || 'immediate'}
+          requireDrop={requireDrop}
         />
       )}
     </div>

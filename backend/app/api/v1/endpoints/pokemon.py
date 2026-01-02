@@ -2,10 +2,11 @@
 
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.errors import bad_request, pokemon_not_found
 from app.services.pokeapi import pokeapi_service
 from app.services.sprites import SpriteStyle, get_all_sprite_urls
 from app.schemas.pokemon import (
@@ -91,7 +92,7 @@ async def get_generation_pokemon(
 ):
     """Get all Pokemon from a specific generation."""
     if generation < 1 or generation > 9:
-        raise HTTPException(status_code=400, detail="Generation must be between 1 and 9")
+        raise bad_request("Generation must be between 1 and 9")
 
     return await pokeapi_service.get_generation_pokemon(generation, db)
 
@@ -106,7 +107,7 @@ async def get_pokemon_by_id(
     pokemon = await pokeapi_service.get_pokemon(pokemon_id, db, sprite_style)
 
     if not pokemon:
-        raise HTTPException(status_code=404, detail="Pokemon not found")
+        raise pokemon_not_found(pokemon_id)
 
     return pokemon
 
@@ -120,7 +121,7 @@ async def get_pokemon_sprites(
     # Verify Pokemon exists
     pokemon = await pokeapi_service.get_pokemon(pokemon_id, db)
     if not pokemon:
-        raise HTTPException(status_code=404, detail="Pokemon not found")
+        raise pokemon_not_found(pokemon_id)
 
     return get_all_sprite_urls(pokemon_id)
 
@@ -135,6 +136,6 @@ async def get_pokemon_by_name(
     pokemon = await pokeapi_service.get_pokemon_by_name(name, db, sprite_style)
 
     if not pokemon:
-        raise HTTPException(status_code=404, detail="Pokemon not found")
+        raise pokemon_not_found(name)
 
     return pokemon

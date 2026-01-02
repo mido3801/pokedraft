@@ -127,6 +127,96 @@ export function parsePointsCsv(
 }
 
 /**
+ * Generate a CSV template for defining a Pokemon pool (without points)
+ */
+export function generatePoolCsv(
+  pokemon: PokemonBoxEntry[],
+  filters: PokemonFilters
+): string {
+  const headers = ['id', 'name', 'types', 'generation', 'bst', 'is_legendary', 'is_mythical']
+
+  const rows = pokemon
+    .filter(p => pokemonPassesFilters(p, filters))
+    .sort((a, b) => a.id - b.id)
+    .map(p => {
+      return [
+        p.id.toString(),
+        p.name,
+        `"${p.types.join(',')}"`,
+        p.generation.toString(),
+        p.bst.toString(),
+        p.is_legendary.toString(),
+        p.is_mythical.toString(),
+      ].join(',')
+    })
+
+  return [headers.join(','), ...rows].join('\n')
+}
+
+/**
+ * Parse a CSV file and extract Pokemon IDs for the pool (no points required)
+ */
+export function parsePoolCsv(
+  csvContent: string
+): { pokemonIds: number[], errors: string[], warnings: string[] } {
+  const pokemonIds: number[] = []
+  const errors: string[] = []
+  const warnings: string[] = []
+
+  const lines = csvContent.trim().split('\n')
+  if (lines.length < 2) {
+    errors.push('CSV file is empty or missing data rows')
+    return { pokemonIds, errors, warnings }
+  }
+
+  // Parse header to find column indices
+  const header = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/"/g, ''))
+  const idIndex = header.indexOf('id')
+
+  if (idIndex === -1) {
+    errors.push('CSV must have an "id" column')
+    return { pokemonIds, errors, warnings }
+  }
+
+  // Parse data rows
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (!line) continue
+
+    // Simple CSV parsing (handles quoted fields)
+    const values: string[] = []
+    let current = ''
+    let inQuotes = false
+
+    for (const char of line) {
+      if (char === '"') {
+        inQuotes = !inQuotes
+      } else if (char === ',' && !inQuotes) {
+        values.push(current.trim())
+        current = ''
+      } else {
+        current += char
+      }
+    }
+    values.push(current.trim())
+
+    const idStr = values[idIndex]?.replace(/"/g, '')
+    const pokemonId = parseInt(idStr, 10)
+
+    if (isNaN(pokemonId) || pokemonId <= 0) {
+      warnings.push(`Row ${i + 1}: Invalid Pokemon ID "${idStr}"`)
+      continue
+    }
+
+    if (!pokemonIds.includes(pokemonId)) {
+      pokemonIds.push(pokemonId)
+    }
+  }
+
+  return { pokemonIds, errors, warnings }
+}
+
+/**
  * Download content as a file
  */
 export function downloadFile(content: string, filename: string): void {

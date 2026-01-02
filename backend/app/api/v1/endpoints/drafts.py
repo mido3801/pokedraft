@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, status, Query
-from uuid import UUID
+from uuid import uuid4, UUID
 from datetime import datetime, timedelta
 from typing import Optional
+
+from fastapi import APIRouter, Depends, status, Query
 from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +15,6 @@ from app.core.security import (
 )
 from app.core.config import settings
 from app.core.errors import (
-    season_not_found,
     draft_not_found,
     team_not_found,
     not_league_owner,
@@ -22,7 +22,7 @@ from app.core.errors import (
     forbidden,
     unauthorized,
 )
-from app.core.auth import get_season as fetch_season
+from app.core.auth import get_season as fetch_season, require_season_league_owner
 from app.schemas.draft import (
     Draft,
     DraftCreate,
@@ -48,12 +48,13 @@ router = APIRouter()
 @router.post("", response_model=Draft, status_code=status.HTTP_201_CREATED)
 async def create_draft(
     draft: DraftCreate,
-    season_id: UUID = Query(..., description="Season to create draft for"),
+    season_league: tuple = Depends(require_season_league_owner),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a draft for a season (league owner only)."""
-    season = await fetch_season(season_id, db)
+    season, league = season_league
+    season_id = season.id
 
     # Check if season already has a draft
     existing_result = await db.execute(
@@ -61,15 +62,6 @@ async def create_draft(
     )
     if existing_result.scalar_one_or_none():
         raise bad_request("Season already has a draft")
-
-    # Verify user is league owner
-    league_result = await db.execute(
-        select(LeagueModel).where(LeagueModel.id == season.league_id)
-    )
-    league = league_result.scalar_one_or_none()
-
-    if not league or league.owner_id != current_user.id:
-        raise not_league_owner()
 
     # Check if user already has a pending (non-expired) draft for this league
     now = datetime.utcnow()
@@ -115,8 +107,7 @@ async def create_draft(
             }
 
     # Generate draft ID explicitly so we can use it for teams
-    import uuid
-    draft_id = uuid.uuid4()
+    draft_id = uuid4()
 
     db_draft = DraftModel(
         id=draft_id,
@@ -155,7 +146,7 @@ async def create_draft(
     creator_team_id = None
 
     for position, (membership, user) in enumerate(ordered_members):
-        team_id = uuid.uuid4()
+        team_id = uuid4()
         team = TeamModel(
             id=team_id,
             draft_id=draft_id,
@@ -305,9 +296,8 @@ async def create_anonymous_draft(
             }
 
     # Generate UUIDs explicitly so they're available before commit
-    import uuid
-    draft_id = uuid.uuid4()
-    team_id = uuid.uuid4()
+    draft_id = uuid4()
+    team_id = uuid4()
 
     db_draft = DraftModel(
         id=draft_id,
@@ -424,16 +414,31 @@ async def get_my_drafts(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get all drafts created by the current user (excludes expired pending drafts)."""
+    """Get all drafts created by or participated in by the current user (excludes expired pending drafts)."""
     now = datetime.utcnow()
+
+    # Subquery to find drafts where user has a team
+    user_team_drafts = (
+        select(TeamModel.draft_id)
+        .where(TeamModel.user_id == current_user.id)
+        .where(TeamModel.draft_id.isnot(None))
+        .scalar_subquery()
+    )
+
     # Query drafts with team count, excluding expired pending drafts
+    # Include drafts where user is creator OR has a team
     result = await db.execute(
         select(
             DraftModel,
             func.count(TeamModel.id).label("team_count")
         )
         .outerjoin(TeamModel, DraftModel.id == TeamModel.draft_id)
-        .where(DraftModel.creator_id == current_user.id)
+        .where(
+            or_(
+                DraftModel.creator_id == current_user.id,
+                DraftModel.id.in_(user_team_drafts)
+            )
+        )
         .where(
             or_(
                 DraftModel.status != DraftStatus.PENDING,  # Show all non-pending
@@ -499,10 +504,7 @@ async def delete_draft(
 
     # Only the creator can delete the draft
     if draft.creator_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only delete drafts you created",
-        )
+        raise forbidden("You can only delete drafts you created")
 
     # Can only delete pending drafts
     if draft.status != DraftStatus.PENDING:

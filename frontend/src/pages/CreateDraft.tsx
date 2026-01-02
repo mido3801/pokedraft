@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext'
 import PokemonBox from '../components/PokemonBox'
 import PokemonFiltersComponent from '../components/PokemonFilters'
 import PointsManager from '../components/PointsManager'
+import PoolFileLoader from '../components/PoolFileLoader'
 import SavePresetModal from '../components/SavePresetModal'
 import LoadPresetModal from '../components/LoadPresetModal'
 import { TEMPLATE_PRESETS, applyTemplate, getTemplateOptions } from '../data/templatePresets'
@@ -56,6 +57,9 @@ export default function CreateDraft() {
   // Point value state for budget mode
   const [pokemonPoints, setPokemonPoints] = useState<PokemonPointsMap>({})
   const [pointsEditMode, setPointsEditMode] = useState(false)
+  // Pool source state: 'filters' uses the filter system, 'file' uses uploaded CSV
+  const [poolSource, setPoolSource] = useState<'filters' | 'file'>('filters')
+  const [loadedPoolIds, setLoadedPoolIds] = useState<number[]>([])
   const [createdDraft, setCreatedDraft] = useState<{
     draftId: string
     rejoinCode: string
@@ -195,12 +199,22 @@ export default function CreateDraft() {
       }
     }
 
+    // Validation for file-loaded pool
+    if (formData.format !== 'auction' && !formData.budgetEnabled && poolSource === 'file') {
+      if (loadedPoolIds.length === 0) {
+        setError('You must upload a CSV file with Pokemon IDs when using "Load from File" pool source.')
+        return
+      }
+    }
+
     setIsLoading(true)
 
     try {
       const isAuction = formData.format === 'auction'
 
-      // Build pokemon_pool with points when point cap mode is enabled (NOT for auction)
+      // Build pokemon_pool when:
+      // 1. Point cap mode is enabled (NOT for auction) - include points
+      // 2. Pool source is 'file' (NOT for auction) - no points
       let pokemon_pool: Array<{
         pokemon_id: number
         name: string
@@ -210,13 +224,24 @@ export default function CreateDraft() {
       }> | undefined
 
       if (!isAuction && formData.budgetEnabled) {
-        // Only include Pokemon that pass filters AND have points assigned
+        // Point cap mode: Only include Pokemon that pass filters AND have points assigned
         pokemon_pool = allPokemon
           .filter(p => pokemonPassesFilters(p, filters) && pokemonPoints[p.id] !== undefined)
           .map(p => ({
             pokemon_id: p.id,
             name: p.name,
             points: pokemonPoints[p.id],
+            types: p.types,
+            generation: p.generation,
+          }))
+      } else if (!isAuction && poolSource === 'file' && loadedPoolIds.length > 0) {
+        // File-loaded pool: Use the loaded Pokemon IDs (no points)
+        pokemon_pool = allPokemon
+          .filter(p => loadedPoolIds.includes(p.id))
+          .map(p => ({
+            pokemon_id: p.id,
+            name: p.name,
+            points: null,
             types: p.types,
             generation: p.generation,
           }))
@@ -233,8 +258,9 @@ export default function CreateDraft() {
         timer_seconds: formData.timerSeconds,
         budget_enabled: budgetEnabled,
         budget_per_team: budgetEnabled ? formData.budgetPerTeam : undefined,
-        // For auction: use filters normally. For point cap: no filters (use explicit pool)
-        pokemon_filters: (isAuction || !formData.budgetEnabled) ? filters : undefined,
+        // Use filters when: auction mode OR (snake/linear without point cap AND using filters source)
+        // Don't use filters when: point cap mode OR file-loaded pool
+        pokemon_filters: (isAuction || (!formData.budgetEnabled && poolSource === 'filters')) ? filters : undefined,
         pokemon_pool: pokemon_pool,
         template_id: formData.template || undefined,
         // Auction-specific settings
@@ -569,30 +595,78 @@ export default function CreateDraft() {
         <div className="card">
           <h2 className="text-lg font-semibold mb-4">Pokémon Pool</h2>
 
-          {/* Template Selection */}
-          <div className="mb-4">
-            <label className="label">Template</label>
-            <select
-              value={formData.template}
-              onChange={(e) => handleTemplateChange(e.target.value)}
-              className="input"
-              disabled={isLoading}
-            >
-              {templateOptions.map(opt => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            {formData.template && TEMPLATE_PRESETS[formData.template] && (
-              <p className="text-sm text-gray-500 mt-1">
-                {TEMPLATE_PRESETS[formData.template].description}
-              </p>
-            )}
-          </div>
+          {/* Pool Source Selection - only for non-auction, non-point-cap drafts */}
+          {formData.format !== 'auction' && !formData.budgetEnabled && (
+            <div className="mb-4">
+              <label className="label">Pool Source</label>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="poolSource"
+                    value="filters"
+                    checked={poolSource === 'filters'}
+                    onChange={() => setPoolSource('filters')}
+                    className="text-pokemon-red"
+                    disabled={isLoading}
+                  />
+                  <span className="text-sm">Use Filters</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="poolSource"
+                    value="file"
+                    checked={poolSource === 'file'}
+                    onChange={() => setPoolSource('file')}
+                    className="text-pokemon-red"
+                    disabled={isLoading}
+                  />
+                  <span className="text-sm">Load from File</span>
+                </label>
+              </div>
+            </div>
+          )}
 
-          {/* Preset buttons - only shown when logged in */}
-          {user && (
+          {/* Pool File Loader - shown when pool source is 'file' */}
+          {formData.format !== 'auction' && !formData.budgetEnabled && poolSource === 'file' && (
+            <div className="mb-4">
+              <PoolFileLoader
+                pokemon={allPokemon}
+                filters={filters}
+                loadedPoolIds={loadedPoolIds}
+                onPoolLoad={setLoadedPoolIds}
+                onClear={() => setLoadedPoolIds([])}
+              />
+            </div>
+          )}
+
+          {/* Template Selection - only shown when using filters */}
+          {(formData.format === 'auction' || formData.budgetEnabled || poolSource === 'filters') && (
+            <div className="mb-4">
+              <label className="label">Template</label>
+              <select
+                value={formData.template}
+                onChange={(e) => handleTemplateChange(e.target.value)}
+                className="input"
+                disabled={isLoading}
+              >
+                {templateOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              {formData.template && TEMPLATE_PRESETS[formData.template] && (
+                <p className="text-sm text-gray-500 mt-1">
+                  {TEMPLATE_PRESETS[formData.template].description}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Preset buttons - only shown when logged in and using filters */}
+          {user && (formData.format === 'auction' || formData.budgetEnabled || poolSource === 'filters') && (
             <div className="flex gap-2 mb-4">
               <button
                 type="button"
@@ -613,24 +687,27 @@ export default function CreateDraft() {
             </div>
           )}
 
-          {/* Toggle to show/hide Pokemon pool customization */}
-          <button
-            type="button"
-            onClick={() => setShowPokemonPool(!showPokemonPool)}
-            className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 mb-4"
-          >
-            <svg
-              className={`w-4 h-4 transition-transform ${showPokemonPool ? 'rotate-90' : ''}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          {/* Toggle to show/hide Pokemon pool customization - only for filter mode */}
+          {(formData.format === 'auction' || formData.budgetEnabled || poolSource === 'filters') && (
+            <button
+              type="button"
+              onClick={() => setShowPokemonPool(!showPokemonPool)}
+              className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 mb-4"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-            {showPokemonPool ? 'Hide' : 'Show'} Pokémon Pool Customization
-          </button>
+              <svg
+                className={`w-4 h-4 transition-transform ${showPokemonPool ? 'rotate-90' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+              {showPokemonPool ? 'Hide' : 'Show'} Pokémon Pool Customization
+            </button>
+          )}
 
-          {showPokemonPool && (
+          {/* Pool customization - only for filter mode */}
+          {(formData.format === 'auction' || formData.budgetEnabled || poolSource === 'filters') && showPokemonPool && (
             <div className="space-y-4">
               {/* Filters */}
               <PokemonFiltersComponent
@@ -652,6 +729,23 @@ export default function CreateDraft() {
                   editablePoints={formData.format !== 'auction' && formData.budgetEnabled && pointsEditMode}
                 />
               </div>
+            </div>
+          )}
+
+          {/* Pool preview for file mode */}
+          {formData.format !== 'auction' && !formData.budgetEnabled && poolSource === 'file' && loadedPoolIds.length > 0 && (
+            <div className="mt-4">
+              <h3 className="text-sm font-medium text-gray-700 mb-2">Loaded Pool Preview ({loadedPoolIds.length} Pokémon)</h3>
+              <PokemonBox
+                pokemon={allPokemon.filter(p => loadedPoolIds.includes(p.id))}
+                filters={{ ...filters, custom_inclusions: loadedPoolIds, generations: [], evolution_stages: [] }}
+                onToggleExclusion={() => {}}
+                isLoading={isLoadingPokemon}
+                showPoints={false}
+                pokemonPoints={{}}
+                onPointChange={() => {}}
+                editablePoints={false}
+              />
             </div>
           )}
         </div>

@@ -8,6 +8,11 @@ interface DevLoginResponse {
   user: User
 }
 
+interface UserUpdate {
+  display_name?: string
+  avatar_url?: string
+}
+
 export const authService = {
   async getCurrentUser(): Promise<User | null> {
     try {
@@ -74,5 +79,9 @@ export const authService = {
     } else {
       clearStoredToken()
     }
+  },
+
+  async updateUser(update: UserUpdate): Promise<User> {
+    return api.put<User>('/auth/me', update)
   },
 }

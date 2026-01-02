@@ -11,6 +11,7 @@ interface AuthContextType {
   linkDiscord: () => Promise<{ error: Error | null }>
   devLogin: (userNumber?: number) => Promise<void>
   logout: () => Promise<void>
+  updateUser: (update: { display_name?: string; avatar_url?: string }) => Promise<void>
   isAuthenticated: boolean
 }
 
@@ -95,6 +96,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }
 
+  const updateUser = async (update: { display_name?: string; avatar_url?: string }) => {
+    const updatedUser = await authService.updateUser(update)
+    setUser(updatedUser)
+  }
+
   return (
     <AuthContext.Provider
       value={{
@@ -105,6 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         linkDiscord,
         devLogin,
         logout,
+        updateUser,
         isAuthenticated: !!user,
       }}
     >

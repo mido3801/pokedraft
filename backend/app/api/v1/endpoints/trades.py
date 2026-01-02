@@ -1,20 +1,21 @@
-from fastapi import APIRouter, Depends, status, Query
 from uuid import UUID
 from datetime import datetime
+
+from fastapi import APIRouter, Depends, status, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.errors import (
-    season_not_found,
     trade_not_found,
     team_not_found,
     not_league_owner,
     bad_request,
     forbidden,
 )
-from app.core.auth import get_season as fetch_season
+from app.core.auth import get_season as fetch_season, require_season_league_owner
+from app.core.constants import LeagueSettings
 from app.schemas.trade import Trade, TradeCreate
 from app.models.trade import Trade as TradeModel, TradeStatus
 from app.models.team import Team as TeamModel
@@ -91,7 +92,7 @@ async def propose_trade(
             raise bad_request(f"Recipient doesn't own pokemon {pokemon_id}")
 
     # Check if trade requires approval
-    requires_approval = league.settings.get("trade_approval_required", False) if league else False
+    requires_approval = league.settings.get(LeagueSettings.TRADE_APPROVAL_REQUIRED, False) if league else False
 
     db_trade = TradeModel(
         season_id=season_id,

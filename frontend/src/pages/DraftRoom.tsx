@@ -162,6 +162,15 @@ export default function DraftRoom() {
         })
       }
     },
+    onDraftComplete: () => {
+      // Update draft state when draft completes
+      if (draftState) {
+        setDraftState({
+          ...draftState,
+          status: 'completed',
+        })
+      }
+    },
     onUserJoined: (data) => {
       addTeam(data.team_id, data.display_name)
     },

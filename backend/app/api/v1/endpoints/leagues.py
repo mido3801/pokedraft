@@ -1,3 +1,4 @@
+from datetime import datetime
 from fastapi import APIRouter, Depends, status, Query
 from uuid import UUID
 from sqlalchemy import select, func
@@ -22,7 +23,7 @@ from app.core.auth import (
 from app.schemas.league import League, LeagueCreate, LeagueUpdate, LeagueInvite, LeagueMember
 from app.schemas.season import Season, SeasonCreate
 from app.models.league import League as LeagueModel, LeagueMembership
-from app.models.season import Season as SeasonModel
+from app.models.season import Season as SeasonModel, SeasonStatus
 from app.models.user import User
 from app.services.response_builders import build_league_response
 
@@ -338,6 +339,17 @@ async def create_season(
         .where(SeasonModel.league_id == league_id)
     )
     max_season = season_result.scalar() or 0
+
+    # Mark any previous non-completed seasons as COMPLETED
+    if max_season > 0:
+        previous_seasons_result = await db.execute(
+            select(SeasonModel)
+            .where(SeasonModel.league_id == league_id)
+            .where(SeasonModel.status.in_([SeasonStatus.PRE_DRAFT, SeasonStatus.ACTIVE]))
+        )
+        for prev_season in previous_seasons_result.scalars().all():
+            prev_season.status = SeasonStatus.COMPLETED
+            prev_season.completed_at = datetime.utcnow()
 
     db_season = SeasonModel(
         league_id=league_id,

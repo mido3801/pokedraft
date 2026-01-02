@@ -1,20 +1,23 @@
-from fastapi import APIRouter, Depends, status, Query
 from uuid import UUID
 from datetime import datetime
-from sqlalchemy import select, func, and_
+import logging
+
+from fastapi import APIRouter, Depends, status, Query
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+
+logger = logging.getLogger(__name__)
 from app.core.security import get_current_user
 from app.core.errors import (
-    season_not_found,
     waiver_claim_not_found,
-    team_not_found,
     not_league_owner,
     bad_request,
     forbidden,
 )
 from app.core.auth import get_season as fetch_season
+from app.core.constants import LeagueSettings, SeasonSettings
 from app.schemas.waiver import (
     WaiverClaimCreate,
     WaiverClaimResponse,
@@ -50,9 +53,12 @@ async def create_waiver_claim(
     db: AsyncSession = Depends(get_db),
 ):
     """Submit a waiver claim to pick up a free agent Pokemon."""
+    logger.info(f"[WAIVER DEBUG] Creating claim: pokemon_id={claim.pokemon_id}, drop_pokemon_id={claim.drop_pokemon_id}, season_id={season_id}, user_id={current_user.id}")
     season = await fetch_season(season_id, db)
 
+    logger.info(f"[WAIVER DEBUG] Season status: {season.status}")
     if season.status != SeasonStatus.ACTIVE:
+        logger.error("[WAIVER DEBUG] Season not active")
         raise bad_request("Waiver claims can only be submitted during an active season")
 
     # Get league and check if waivers are enabled
@@ -62,10 +68,13 @@ async def create_waiver_claim(
     league = league_result.scalar_one_or_none()
 
     if not league:
+        logger.error("[WAIVER DEBUG] League not found")
         raise bad_request("League not found")
 
-    waiver_enabled = league.settings.get("waiver_enabled", False)
+    waiver_enabled = league.settings.get(LeagueSettings.WAIVER_ENABLED, False)
+    logger.info(f"[WAIVER DEBUG] Waiver enabled: {waiver_enabled}, league settings: {league.settings}")
     if not waiver_enabled:
+        logger.error("[WAIVER DEBUG] Waiver wire not enabled")
         raise bad_request("Waiver wire is not enabled for this league")
 
     # Get user's team in this season
@@ -76,7 +85,9 @@ async def create_waiver_claim(
     )
     team = team_result.scalar_one_or_none()
 
+    logger.info(f"[WAIVER DEBUG] Team found: {team}")
     if not team:
+        logger.error("[WAIVER DEBUG] User has no team in season")
         raise forbidden("You don't have a team in this season")
 
     # Check if Pokemon is actually a free agent (not owned by any team in the season)
@@ -86,7 +97,10 @@ async def create_waiver_claim(
         .where(TeamModel.season_id == season_id)
         .where(DraftPick.pokemon_id == claim.pokemon_id)
     )
-    if owned_result.scalar_one_or_none():
+    owned_pokemon = owned_result.scalar_one_or_none()
+    logger.info(f"[WAIVER DEBUG] Pokemon already owned: {owned_pokemon}")
+    if owned_pokemon:
+        logger.error("[WAIVER DEBUG] Pokemon already owned by a team")
         raise bad_request("This Pokemon is already owned by a team")
 
     # Check if user already has a pending claim for this Pokemon
@@ -96,14 +110,17 @@ async def create_waiver_claim(
         .where(WaiverClaimModel.pokemon_id == claim.pokemon_id)
         .where(WaiverClaimModel.status == WaiverClaimStatus.PENDING)
     )
-    if existing_claim_result.scalar_one_or_none():
+    existing_claim = existing_claim_result.scalar_one_or_none()
+    logger.info(f"[WAIVER DEBUG] Existing pending claim: {existing_claim}")
+    if existing_claim:
+        logger.error("[WAIVER DEBUG] User already has pending claim for this Pokemon")
         raise bad_request("You already have a pending claim for this Pokemon")
 
     # Check weekly limit if configured
-    max_per_week = league.settings.get("waiver_max_per_week")
+    max_per_week = league.settings.get(LeagueSettings.WAIVER_MAX_PER_WEEK)
     if max_per_week is not None:
         # Get current week number (you might want to calculate this from season start)
-        current_week = season.settings.get("current_week", 1)
+        current_week = season.settings.get(SeasonSettings.CURRENT_WEEK, 1)
 
         # Count claims this week
         week_claims_result = await db.execute(
@@ -120,10 +137,46 @@ async def create_waiver_claim(
         if week_claims >= max_per_week:
             raise bad_request(f"You have reached the maximum of {max_per_week} waiver claims this week")
 
-    # Check if drop is required
-    require_drop = league.settings.get("waiver_require_drop", False)
+    # Check if drop is required based on roster size
+    # Get the draft to find roster size limit
+    from app.models.draft import Draft as DraftModel
+    draft_result = await db.execute(
+        select(DraftModel).where(DraftModel.season_id == season_id)
+    )
+    draft = draft_result.scalar_one_or_none()
+
+    # Count current roster size (including pending approved claims)
+    current_roster_result = await db.execute(
+        select(func.count(DraftPick.id))
+        .where(DraftPick.team_id == team.id)
+    )
+    current_roster_size = current_roster_result.scalar() or 0
+
+    # Also count pending approved waiver claims that haven't been executed yet
+    pending_approved_claims_result = await db.execute(
+        select(func.count(WaiverClaimModel.id))
+        .where(WaiverClaimModel.team_id == team.id)
+        .where(WaiverClaimModel.status.in_([
+            WaiverClaimStatus.PENDING,
+            WaiverClaimStatus.APPROVED
+        ]))
+        .where(WaiverClaimModel.drop_pokemon_id.is_(None))
+    )
+    pending_adds = pending_approved_claims_result.scalar() or 0
+
+    roster_size_limit = draft.roster_size if draft else 6  # Default to 6 if no draft found
+
+    # Require drop if roster would exceed limit after this pickup
+    require_drop = (current_roster_size + pending_adds) >= roster_size_limit
+
+    # Also check the league setting for always requiring drops
+    if league.settings.get(LeagueSettings.WAIVER_REQUIRE_DROP, False):
+        require_drop = True
+
+    logger.info(f"[WAIVER DEBUG] Roster size: {current_roster_size}, limit: {roster_size_limit}, pending_adds: {pending_adds}, require_drop: {require_drop}, drop_pokemon_id: {claim.drop_pokemon_id}")
     if require_drop and not claim.drop_pokemon_id:
-        raise bad_request("You must specify a Pokemon to drop when making a waiver claim")
+        logger.error("[WAIVER DEBUG] Roster at capacity, drop required")
+        raise bad_request(f"Your roster is at capacity ({current_roster_size}/{roster_size_limit}). You must specify a Pokemon to drop when making a waiver claim.")
 
     # Verify user owns the Pokemon they want to drop
     if claim.drop_pokemon_id:
@@ -136,11 +189,11 @@ async def create_waiver_claim(
             raise bad_request("You don't own the Pokemon you're trying to drop")
 
     # Determine approval requirements
-    approval_type = league.settings.get("waiver_approval_type", "none")
-    requires_approval = approval_type != "none"
+    approval_type = league.settings.get(LeagueSettings.WAIVER_APPROVAL_TYPE, LeagueSettings.WAIVER_APPROVAL_NONE)
+    requires_approval = approval_type != LeagueSettings.WAIVER_APPROVAL_NONE
 
     # Determine processing type
-    processing_type_str = league.settings.get("waiver_processing_type", "immediate")
+    processing_type_str = league.settings.get(LeagueSettings.WAIVER_PROCESSING_TYPE, LeagueSettings.WAIVER_PROCESSING_IMMEDIATE)
     processing_type = WaiverProcessingType(processing_type_str)
 
     # Calculate process_after for next_week processing
@@ -151,11 +204,11 @@ async def create_waiver_claim(
         pass
 
     # Get current week
-    current_week = season.settings.get("current_week", 1)
+    current_week = season.settings.get(SeasonSettings.CURRENT_WEEK, 1)
 
     # Calculate votes required for league vote
     votes_required = None
-    if approval_type == "league_vote":
+    if approval_type == LeagueSettings.WAIVER_APPROVAL_LEAGUE_VOTE:
         # Get number of league members
         member_count_result = await db.execute(
             select(func.count(LeagueMembership.id))
@@ -334,8 +387,8 @@ async def admin_approve_claim(
     league = league_result.scalar_one_or_none()
 
     # Check if this is admin approval type
-    approval_type = league.settings.get("waiver_approval_type", "none")
-    if approval_type != "admin":
+    approval_type = league.settings.get(LeagueSettings.WAIVER_APPROVAL_TYPE, LeagueSettings.WAIVER_APPROVAL_NONE)
+    if approval_type != LeagueSettings.WAIVER_APPROVAL_ADMIN:
         raise bad_request("This league uses league vote approval, not admin approval")
 
     if not league or league.owner_id != current_user.id:
@@ -397,8 +450,8 @@ async def vote_on_claim(
     )
     league = league_result.scalar_one_or_none()
 
-    approval_type = league.settings.get("waiver_approval_type", "none")
-    if approval_type != "league_vote":
+    approval_type = league.settings.get(LeagueSettings.WAIVER_APPROVAL_TYPE, LeagueSettings.WAIVER_APPROVAL_NONE)
+    if approval_type != LeagueSettings.WAIVER_APPROVAL_LEAGUE_VOTE:
         raise bad_request("This league does not use league vote approval")
 
     # Verify user is a league member
@@ -505,7 +558,9 @@ async def list_free_agents(
     if not draft:
         return FreeAgentList(pokemon=[], total=0)
 
-    pool_pokemon_ids = draft.pokemon_pool.get("pool", [])
+    # Extract pokemon IDs from the pokemon_pool dictionary keys
+    # pokemon_pool is stored as {"1": {...}, "4": {...}, etc}
+    pool_pokemon_ids = [int(pid) for pid in draft.pokemon_pool.keys()] if draft.pokemon_pool else []
     if not pool_pokemon_ids:
         return FreeAgentList(pokemon=[], total=0)
 

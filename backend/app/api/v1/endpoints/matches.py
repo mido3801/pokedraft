@@ -16,7 +16,7 @@ from app.core.errors import (
     bad_request,
     not_found,
 )
-from app.core.auth import get_season as fetch_season
+from app.core.auth import get_season as fetch_season, require_season_league_owner
 from app.schemas.match import Match, MatchResult, Standings, TeamStanding, ScheduleGenerateRequest, BracketState
 from app.models.match import Match as MatchModel
 from app.models.team import Team as TeamModel
@@ -60,22 +60,13 @@ async def get_schedule(
 
 @router.post("/schedule", response_model=list[Match], status_code=status.HTTP_201_CREATED)
 async def generate_schedule(
-    season_id: UUID = Query(..., description="Season to generate schedule for"),
     request: ScheduleGenerateRequest = ScheduleGenerateRequest(),
-    current_user: User = Depends(get_current_user),
+    season_league: tuple = Depends(require_season_league_owner),
     db: AsyncSession = Depends(get_db),
 ):
     """Generate a schedule for a season (league owner only)."""
-    season = await fetch_season(season_id, db)
-
-    # Verify user is league owner
-    league_result = await db.execute(
-        select(LeagueModel).where(LeagueModel.id == season.league_id)
-    )
-    league = league_result.scalar_one_or_none()
-
-    if not league or league.owner_id != current_user.id:
-        raise not_league_owner()
+    season, league = season_league
+    season_id = season.id
 
     # Check if schedule already exists
     existing_result = await db.execute(

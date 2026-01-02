@@ -1,19 +1,27 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { presetService } from '../services/preset'
 import { queryKeys } from '../services/queryKeys'
+import { PoolPreset } from '../types'
+import { downloadFile } from '../utils/csvUtils'
+import PoolPresetModal from './PoolPresetModal'
 import {
   Database,
   Plus,
   Globe,
   Lock,
   Trash2,
+  Pencil,
+  Download,
 } from 'lucide-react'
 
 export default function PoolPresetsCard() {
   const queryClient = useQueryClient()
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingPreset, setEditingPreset] = useState<PoolPreset | null>(null)
+  const [loadingPresetId, setLoadingPresetId] = useState<string | null>(null)
 
   const { data: presets, isLoading } = useQuery({
     queryKey: queryKeys.presets,
@@ -39,6 +47,63 @@ export default function PoolPresetsCard() {
     }
   }
 
+  const handleEdit = async (presetId: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setLoadingPresetId(presetId)
+    try {
+      const fullPreset = await presetService.getPreset(presetId)
+      setEditingPreset(fullPreset)
+      setIsModalOpen(true)
+    } catch (err) {
+      console.error('Failed to load preset:', err)
+    } finally {
+      setLoadingPresetId(null)
+    }
+  }
+
+  const handleDownload = async (presetId: string, presetName: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDownloadingId(presetId)
+    try {
+      const fullPreset = await presetService.getPreset(presetId)
+      // Generate CSV from the pool
+      const headers = ['id', 'name', 'types', 'generation', 'bst', 'is_legendary', 'is_mythical']
+      const rows = Object.entries(fullPreset.pokemon_pool)
+        .map(([id, pokemon]) => {
+          const p = pokemon as { name: string; types: string[]; generation?: number; bst?: number; is_legendary?: boolean; is_mythical?: boolean }
+          return [
+            id,
+            p.name,
+            `"${p.types.join(',')}"`,
+            p.generation?.toString() || '',
+            p.bst?.toString() || '',
+            p.is_legendary?.toString() || 'false',
+            p.is_mythical?.toString() || 'false',
+          ].join(',')
+        })
+        .sort((a, b) => parseInt(a.split(',')[0]) - parseInt(b.split(',')[0]))
+      const csv = [headers.join(','), ...rows].join('\n')
+      const safeName = presetName.replace(/[^a-z0-9]/gi, '_').toLowerCase()
+      downloadFile(csv, `${safeName}_pool.csv`)
+    } catch (err) {
+      console.error('Failed to download preset:', err)
+    } finally {
+      setDownloadingId(null)
+    }
+  }
+
+  const handleCreateNew = () => {
+    setEditingPreset(null)
+    setIsModalOpen(true)
+  }
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false)
+    setEditingPreset(null)
+  }
+
   // Separate own presets from public presets
   const myPresets = presets?.filter(p => !p.creator_name) || []
   const publicPresets = presets?.filter(p => p.creator_name) || []
@@ -52,13 +117,13 @@ export default function PoolPresetsCard() {
           </div>
           <h2 className="text-xl font-bold text-gray-900">Pool Presets</h2>
         </div>
-        <Link
-          to="/draft/create"
+        <button
+          onClick={handleCreateNew}
           className="flex items-center gap-1 text-sm text-purple-600 hover:underline"
         >
           <Plus className="w-4 h-4" />
-          Create New
-        </Link>
+          Add Pool
+        </button>
       </div>
 
       {isLoading ? (
@@ -85,7 +150,31 @@ export default function PoolPresetsCard() {
                   </span>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={(e) => handleEdit(preset.id, e)}
+                  disabled={loadingPresetId === preset.id}
+                  className="p-1.5 rounded text-gray-400 hover:text-purple-500 hover:bg-purple-50 transition-colors disabled:opacity-50"
+                  title="Edit preset"
+                >
+                  {loadingPresetId === preset.id ? (
+                    <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+                  ) : (
+                    <Pencil className="w-4 h-4" />
+                  )}
+                </button>
+                <button
+                  onClick={(e) => handleDownload(preset.id, preset.name, e)}
+                  disabled={downloadingId === preset.id}
+                  className="p-1.5 rounded text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors disabled:opacity-50"
+                  title="Download CSV"
+                >
+                  {downloadingId === preset.id ? (
+                    <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                </button>
                 <button
                   onClick={(e) => handleDelete(preset.id, e)}
                   disabled={deletingId === preset.id}
@@ -115,13 +204,13 @@ export default function PoolPresetsCard() {
           <p className="text-gray-500 mb-4">
             No saved presets yet
           </p>
-          <Link
-            to="/draft/create"
+          <button
+            onClick={handleCreateNew}
             className="inline-flex items-center gap-2 text-purple-600 font-medium hover:underline"
           >
             <Plus className="w-4 h-4" />
-            Create your first preset
-          </Link>
+            Create your first pool
+          </button>
         </div>
       )}
 
@@ -144,6 +233,12 @@ export default function PoolPresetsCard() {
           </div>
         </div>
       )}
+
+      <PoolPresetModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        editPreset={editingPreset}
+      />
     </div>
   )
 }

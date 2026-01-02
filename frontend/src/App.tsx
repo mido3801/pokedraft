@@ -14,6 +14,7 @@ import SeasonDetail from './pages/SeasonDetail'
 import DraftRoom from './pages/DraftRoom'
 import CreateDraft from './pages/CreateDraft'
 import JoinDraft from './pages/JoinDraft'
+import UserSettings from './pages/UserSettings'
 import NotFound from './pages/NotFound'
 
 function App() {
@@ -35,6 +36,7 @@ function App() {
             <Route path="draft/create" element={<CreateDraft />} />
             <Route path="draft/join" element={<JoinDraft />} />
             <Route path="d/:draftId" element={<DraftRoom />} />
+            <Route path="settings" element={<UserSettings />} />
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
