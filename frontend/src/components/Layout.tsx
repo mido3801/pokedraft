@@ -137,15 +137,20 @@ export default function Layout() {
 
       <footer className="bg-gray-800 text-gray-300 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center">
-            <p className="text-sm">
-              PokeDraft
-            </p>
-            <div className="flex space-x-6 text-sm">
-              <a href="#" className="hover:text-white">About</a>
-              <a href="#" className="hover:text-white">Help</a>
-              <a href="#" className="hover:text-white">Discord</a>
+          <div className="flex flex-col gap-4">
+            <div className="flex justify-between items-center">
+              <p className="text-sm">
+                PokéDraft
+              </p>
+              <div className="flex space-x-6 text-sm">
+                <a href="#" className="hover:text-white">About</a>
+                <a href="#" className="hover:text-white">Help</a>
+                <a href="#" className="hover:text-white">Discord</a>
+              </div>
             </div>
+            <p className="text-xs text-gray-500 text-center">
+              Pokémon and all respective names are trademarks and © of The Pokémon Company, Nintendo, Game Freak, and Creatures Inc. This is a fan-made project and is not affiliated with or endorsed by The Pokémon Company.
+            </p>
           </div>
         </div>
       </footer>
