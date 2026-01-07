@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { leagueService } from '../services/league'
 import { queryKeys } from '../services/queryKeys'
@@ -50,8 +50,18 @@ const initialFormState: CreateLeagueForm = {
 
 export default function LeagueList() {
   const navigate = useNavigate()
+  const location = useLocation()
   const queryClient = useQueryClient()
   const [showCreateModal, setShowCreateModal] = useState(false)
+
+  // Auto-open create modal if navigated with openCreate state
+  useEffect(() => {
+    if (location.state?.openCreate) {
+      setShowCreateModal(true)
+      // Clear the state so it doesn't reopen on refresh
+      navigate(location.pathname, { replace: true, state: {} })
+    }
+  }, [location.state, navigate, location.pathname])
   const [showJoinModal, setShowJoinModal] = useState(false)
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false)
   const [form, setForm] = useState<CreateLeagueForm>(initialFormState)

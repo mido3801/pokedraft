@@ -135,11 +135,12 @@ export default function Dashboard() {
               </Link>
               <Link
                 to="/leagues"
+                state={{ openCreate: true }}
                 className="group flex items-center justify-between w-full px-4 py-3 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium transition-colors"
               >
                 <span className="flex items-center gap-2">
-                  <Trophy className="w-4 h-4 text-pokemon-yellow" />
-                  View My Leagues
+                  <Plus className="w-4 h-4 text-pokemon-yellow" />
+                  Create a League
                 </span>
                 <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
               </Link>
