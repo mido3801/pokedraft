@@ -12,5 +12,13 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(
   supabaseUrl || '',
-  supabaseAnonKey || ''
+  supabaseAnonKey || '',
+  {
+    auth: {
+      // Disable automatic URL detection - we handle code exchange manually in AuthCallback
+      detectSessionInUrl: false,
+      // Use PKCE flow (default in v2, but explicit for clarity)
+      flowType: 'pkce',
+    },
+  }
 )
