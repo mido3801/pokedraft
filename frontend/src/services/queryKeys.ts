@@ -27,8 +27,18 @@ export const queryKeys = {
   presets: ['presets'] as const,
   preset: (presetId: string) => ['preset', presetId] as const,
 
-  // Pokemon
-  pokemonBox: (spriteStyle: string) => ['pokemon-box', spriteStyle] as const,
+  // Pokemon - static data that rarely changes
+  pokemon: {
+    all: ['pokemon'] as const,
+    box: (spriteStyle: string) => ['pokemon', 'box', spriteStyle] as const,
+    types: ['pokemon', 'types'] as const,
+    byId: (id: number, spriteStyle?: string) => ['pokemon', 'detail', id, spriteStyle] as const,
+    byName: (name: string, spriteStyle?: string) => ['pokemon', 'detail', name, spriteStyle] as const,
+    search: (params: Record<string, unknown>) => ['pokemon', 'search', params] as const,
+  },
+
+  // Legacy - keep for backwards compatibility
+  pokemonBox: (spriteStyle: string) => ['pokemon', 'box', spriteStyle] as const,
 } as const
 
 // Type helper for query key values

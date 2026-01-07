@@ -1,6 +1,9 @@
 import { Outlet, Link, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
+import { pokemonService } from '../services/pokemon'
+import { queryKeys } from '../services/queryKeys'
 
 function DevUserSwitcher() {
   const { user, devLogin } = useAuth()
@@ -75,7 +78,17 @@ function DevUserSwitcher() {
 export default function Layout() {
   const { user, isAuthenticated, logout } = useAuth()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [showHelp, setShowHelp] = useState(false)
+
+  // Prefetch Pokemon data when hovering over draft-related links
+  const prefetchPokemonData = useCallback(() => {
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.pokemon.box('default'),
+      queryFn: () => pokemonService.getAllForBox('default'),
+      staleTime: 1000 * 60 * 60, // 1 hour
+    })
+  }, [queryClient])
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -98,7 +111,11 @@ export default function Layout() {
                 </button>
               </div>
               <div className="hidden md:flex space-x-4">
-                <Link to="/draft/create" className="hover:text-gray-200">
+                <Link
+                  to="/draft/create"
+                  className="hover:text-gray-200"
+                  onMouseEnter={prefetchPokemonData}
+                >
                   Quick Draft
                 </Link>
                 {isAuthenticated && (
@@ -179,7 +196,7 @@ export default function Layout() {
             </ul>
             <div className="flex items-center gap-3">
               <a
-                href="https://discord.gg/pokedraft"
+                href="https://discord.gg/7F6NdnrSRK"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
@@ -189,7 +206,7 @@ export default function Layout() {
                 </svg>
                 Join Discord
               </a>
-              <span className="text-sm text-gray-500">for bugs & feature requests</span>
+              <span className="text-sm text-gray-500">to report bugs & request features!</span>
             </div>
           </div>
         </div>

@@ -1,12 +1,12 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { DraftFormat, PokemonFilters, PokemonBoxEntry, PokemonPointsMap, DEFAULT_POKEMON_FILTERS } from '../types'
 import { draftService } from '../services/draft'
-import { pokemonService } from '../services/pokemon'
 import { queryKeys } from '../services/queryKeys'
 import { storage } from '../utils/storage'
 import { useAuth } from '../context/AuthContext'
+import { usePokemonBox } from '../hooks/usePokemonQueries'
 import PokemonBox from '../components/PokemonBox'
 import PokemonFiltersComponent from '../components/PokemonFilters'
 import PointsManager from '../components/PointsManager'
@@ -49,8 +49,6 @@ export default function CreateDraft() {
     bidIncrement: 1,
   })
   const [filters, setFilters] = useState<PokemonFilters>(DEFAULT_POKEMON_FILTERS)
-  const [allPokemon, setAllPokemon] = useState<PokemonBoxEntry[]>([])
-  const [isLoadingPokemon, setIsLoadingPokemon] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [showPokemonPool, setShowPokemonPool] = useState(false)
@@ -67,22 +65,16 @@ export default function CreateDraft() {
     sessionToken: string
   } | null>(null)
 
-  // Load all Pokemon on mount
+  // Load all Pokemon using React Query - cached for 1 hour
+  const { data: pokemonData, isLoading: isLoadingPokemon, error: pokemonError } = usePokemonBox()
+  const allPokemon = pokemonData?.pokemon ?? []
+
+  // Set error if Pokemon data fails to load
   useEffect(() => {
-    const loadPokemon = async () => {
-      try {
-        setIsLoadingPokemon(true)
-        const response = await pokemonService.getAllForBox()
-        setAllPokemon(response.pokemon)
-      } catch (err) {
-        console.error('Failed to load Pokemon:', err)
-        setError('Failed to load Pokémon data')
-      } finally {
-        setIsLoadingPokemon(false)
-      }
+    if (pokemonError) {
+      setError('Failed to load Pokémon data')
     }
-    loadPokemon()
-  }, [])
+  }, [pokemonError])
 
   // Handle template change - apply preset filters and settings
   const handleTemplateChange = (templateId: string) => {
