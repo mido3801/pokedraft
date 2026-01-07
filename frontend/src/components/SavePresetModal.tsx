@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { presetService } from '../services/preset'
 import { queryKeys } from '../services/queryKeys'
-import { PokemonBoxEntry, PokemonPointsMap, PokemonFilters, DEFAULT_POKEMON_FILTERS } from '../types'
+import { PokemonBoxEntry, PokemonPointsMap, PokemonFilters } from '../types'
 import { Globe, Lock, X, Filter } from 'lucide-react'
 
 interface SavePresetModalProps {

@@ -183,7 +183,7 @@ export default function SeasonDetail() {
   })
 
   const approveWaiverMutation = useMutation({
-    mutationFn: (claimId: string) => waiverService.adminAction(claimId, { action: 'approve' }),
+    mutationFn: (claimId: string) => waiverService.adminAction(claimId, { approved: true }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.seasonWaiverClaims(seasonId!) })
       queryClient.invalidateQueries({ queryKey: queryKeys.seasonTeams(seasonId!) })
@@ -192,21 +192,21 @@ export default function SeasonDetail() {
   })
 
   const rejectWaiverMutation = useMutation({
-    mutationFn: (claimId: string) => waiverService.adminAction(claimId, { action: 'reject' }),
+    mutationFn: (claimId: string) => waiverService.adminAction(claimId, { approved: false }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.seasonWaiverClaims(seasonId!) })
     },
   })
 
   const voteForWaiverMutation = useMutation({
-    mutationFn: (claimId: string) => waiverService.vote(claimId, { vote: 'for' }),
+    mutationFn: (claimId: string) => waiverService.vote(claimId, { vote: true }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.seasonWaiverClaims(seasonId!) })
     },
   })
 
   const voteAgainstWaiverMutation = useMutation({
-    mutationFn: (claimId: string) => waiverService.vote(claimId, { vote: 'against' }),
+    mutationFn: (claimId: string) => waiverService.vote(claimId, { vote: false }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.seasonWaiverClaims(seasonId!) })
     },
