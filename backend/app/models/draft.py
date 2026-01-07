@@ -53,6 +53,7 @@ class Draft(Base):
     roster_size: Mapped[int] = mapped_column(Integer, default=6)
     # Auction-specific settings
     nomination_timer_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    bid_timer_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=15)
     min_bid: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=1)
     bid_increment: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=1)
     status: Mapped[DraftStatus] = mapped_column(Enum(DraftStatus), default=DraftStatus.PENDING)

@@ -70,6 +70,7 @@ class DraftBase(BaseModel):
     roster_size: int = Field(default=6, ge=1, le=20)
     # Auction-specific settings
     nomination_timer_seconds: Optional[int] = None
+    bid_timer_seconds: Optional[int] = Field(default=15, ge=5, le=120)
     min_bid: Optional[int] = Field(default=1, ge=1)
     bid_increment: Optional[int] = Field(default=1, ge=1)
 
@@ -115,6 +116,7 @@ class DraftState(BaseModel):
     budget_per_team: Optional[int] = None
     # Auction-specific settings
     nomination_timer_seconds: Optional[int] = None
+    bid_timer_seconds: Optional[int] = None
     min_bid: Optional[int] = None
     bid_increment: Optional[int] = None
 

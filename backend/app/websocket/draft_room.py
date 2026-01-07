@@ -57,9 +57,19 @@ class DraftRoom:
         self.picks: List[DraftPick] = []
         self.available_pokemon: List[dict] = []
 
+        # Auction-specific settings
+        self.nomination_timer_seconds: Optional[int] = None
+        self.bid_timer_seconds: int = 15
+        self.min_bid: int = 1
+        self.bid_increment: int = 1
+
         # Auction-specific state
-        self.current_nomination: Optional[dict] = None
-        self.current_bids: List[dict] = []
+        self.auction_phase: str = "nominating"  # "nominating" | "bidding" | "idle"
+        self.current_nomination: Optional[dict] = None  # {pokemon_id, pokemon_name, nominator_id, nominator_name}
+        self.current_highest_bid: Optional[dict] = None  # {team_id, team_name, amount}
+        self.bid_history: List[dict] = []
+        self.nominating_team_index: int = 0  # Index in pick_order for nomination rotation
+        self.bid_timer_task: Optional[asyncio.Task] = None
 
     def get_state(self) -> dict:
         """Get the current state as a JSON-serializable dict."""
@@ -119,6 +129,16 @@ class DraftRoom:
             ],
             "budget_enabled": self.budget_enabled,
             "budget_per_team": self.budget_per_team,
+            # Auction-specific settings
+            "nomination_timer_seconds": self.nomination_timer_seconds,
+            "bid_timer_seconds": self.bid_timer_seconds,
+            "min_bid": self.min_bid,
+            "bid_increment": self.bid_increment,
+            # Auction state
+            "auction_phase": self.auction_phase if self.format == "auction" else None,
+            "current_nomination": self.current_nomination,
+            "current_highest_bid": self.current_highest_bid,
+            "bid_timer_end": self.timer_end.isoformat() if self.timer_end and self.format == "auction" and self.auction_phase == "bidding" else None,
         }
 
     def get_current_team(self) -> Optional[UUID]:
@@ -126,7 +146,12 @@ class DraftRoom:
         if not self.pick_order or self.current_pick >= len(self.pick_order) * self.roster_size:
             return None
 
-        if self.format == "snake":
+        if self.format == "auction":
+            # For auction: return nominating team during nominating phase, None during bidding
+            if self.auction_phase == "nominating":
+                return self.get_nominating_team()
+            return None  # During bidding, all teams can bid
+        elif self.format == "snake":
             round_num = self.current_pick // len(self.pick_order)
             position_in_round = self.current_pick % len(self.pick_order)
             if round_num % 2 == 1:
@@ -134,6 +159,41 @@ class DraftRoom:
             return self.pick_order[position_in_round]
         else:  # linear
             return self.pick_order[self.current_pick % len(self.pick_order)]
+
+    def get_nominating_team(self) -> Optional[UUID]:
+        """Get the team ID whose turn it is to nominate (auction only)."""
+        if not self.pick_order:
+            return None
+        # Rotation through teams for nominations
+        return self.pick_order[self.nominating_team_index % len(self.pick_order)]
+
+    def get_teams_needing_pokemon(self) -> List[UUID]:
+        """Get list of teams that still need Pokemon (haven't filled roster)."""
+        teams_needing = []
+        for team_id, participant in self.participants.items():
+            if len(participant.pokemon) < self.roster_size:
+                teams_needing.append(team_id)
+        return teams_needing
+
+    def advance_nominating_team(self):
+        """Advance to the next team that needs Pokemon for nomination."""
+        if not self.pick_order:
+            return
+
+        teams_needing = self.get_teams_needing_pokemon()
+        if not teams_needing:
+            return
+
+        # Find next team in rotation that still needs Pokemon
+        start_index = self.nominating_team_index
+        for _ in range(len(self.pick_order)):
+            self.nominating_team_index = (self.nominating_team_index + 1) % len(self.pick_order)
+            next_team = self.pick_order[self.nominating_team_index]
+            if next_team in teams_needing:
+                return
+
+        # Fallback: reset to start if somehow no valid team found
+        self.nominating_team_index = start_index
 
     def is_pokemon_available(self, pokemon_id: int) -> bool:
         """Check if a Pokemon is still available."""
@@ -149,16 +209,88 @@ class DraftRoom:
             return False
         return participant.budget_remaining >= points
 
+    def has_roster_space(self, team_id: UUID) -> bool:
+        """Check if a team has roster space for another Pokemon."""
+        participant = self.participants.get(team_id)
+        if not participant:
+            return False
+        return len(participant.pokemon) < self.roster_size
+
+    def clear_auction_state(self):
+        """Clear current auction state after a pick is made."""
+        self.current_nomination = None
+        self.current_highest_bid = None
+        self.bid_history = []
+        self.auction_phase = "nominating"
+        if self.bid_timer_task:
+            self.bid_timer_task.cancel()
+            self.bid_timer_task = None
+        self.timer_end = None
+
+    def start_nomination(self, pokemon_id: int, pokemon_name: str, nominator_id: UUID):
+        """Start a new nomination and auto-bid at min_bid."""
+        nominator = self.participants.get(nominator_id)
+        nominator_name = nominator.display_name if nominator else "Unknown"
+
+        self.current_nomination = {
+            "pokemon_id": pokemon_id,
+            "pokemon_name": pokemon_name,
+            "nominator_id": str(nominator_id),
+            "nominator_name": nominator_name,
+        }
+
+        # Auto-bid at min_bid
+        self.current_highest_bid = {
+            "team_id": str(nominator_id),
+            "team_name": nominator_name,
+            "amount": self.min_bid,
+        }
+
+        self.bid_history = [{
+            "team_id": str(nominator_id),
+            "team_name": nominator_name,
+            "amount": self.min_bid,
+        }]
+
+        self.auction_phase = "bidding"
+
+    def place_auction_bid(self, team_id: UUID, amount: int) -> bool:
+        """Place a bid in the current auction. Returns True if valid."""
+        if not self.current_nomination or self.auction_phase != "bidding":
+            return False
+
+        participant = self.participants.get(team_id)
+        if not participant:
+            return False
+
+        # Record the bid
+        self.current_highest_bid = {
+            "team_id": str(team_id),
+            "team_name": participant.display_name,
+            "amount": amount,
+        }
+
+        self.bid_history.append({
+            "team_id": str(team_id),
+            "team_name": participant.display_name,
+            "amount": amount,
+        })
+
+        return True
+
     def make_pick(self, team_id: UUID, pokemon_id: int, points: Optional[int] = None) -> DraftPick:
         """
         Record a pick. Returns the pick or raises ValueError if invalid.
+        For auction format, turn check is skipped (winner determined by bidding).
         """
         if self.status != "live":
             raise ValueError("Draft is not live")
 
-        current_team = self.get_current_team()
-        if current_team != team_id:
-            raise ValueError("Not your turn")
+        # For non-auction formats, verify turn order
+        if self.format != "auction":
+            current_team = self.get_current_team()
+            if current_team != team_id:
+                raise ValueError("Not your turn")
 
         if not self.is_pokemon_available(pokemon_id):
             raise ValueError("Pokemon not available")
@@ -183,8 +315,8 @@ class DraftRoom:
         total_picks_needed = len(self.pick_order) * self.roster_size
         if self.current_pick >= total_picks_needed:
             self.status = "completed"
-        else:
-            # Reset timer for next pick
+        elif self.format != "auction":
+            # Reset timer for next pick (non-auction only; auction handles its own timers)
             self.start_timer()
 
         return pick

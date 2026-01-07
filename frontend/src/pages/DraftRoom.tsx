@@ -115,6 +115,23 @@ export default function DraftRoom() {
   const [showFilters, setShowFilters] = useState(false)
   const [showTeamsPanel, setShowTeamsPanel] = useState(false)
 
+  // Auction-specific state
+  const [currentNomination, setCurrentNomination] = useState<{
+    pokemon_id: number
+    pokemon_name: string
+    nominator_id: string
+    nominator_name: string
+    min_bid: number
+  } | null>(null)
+  const [currentBid, setCurrentBid] = useState<{
+    bidder_id: string
+    bidder_name: string
+    amount: number
+  } | null>(null)
+  const [bidTimerEnd, setBidTimerEnd] = useState<string | null>(null)
+  const [bidAmount, setBidAmount] = useState<number>(1)
+  const [bidSecondsRemaining, setBidSecondsRemaining] = useState<number | null>(null)
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -136,12 +153,33 @@ export default function DraftRoom() {
     return pokemon?.name || `Pokemon #${pokemonId}`
   }, [])
 
-  const { isConnected, makePick, startDraft } = useWebSocket({
+  const { isConnected, makePick, startDraft, nominate, placeBid } = useWebSocket({
     draftId: draftId!,
     teamId: myTeamId,
     sessionToken,
     onStateUpdate: (state) => {
       setDraftState(state)
+      // Initialize auction state from server state
+      if (state.current_nomination) {
+        setCurrentNomination({
+          pokemon_id: state.current_nomination.pokemon_id,
+          pokemon_name: state.current_nomination.pokemon_name,
+          nominator_id: state.current_nomination.nominator_id,
+          nominator_name: state.current_nomination.nominator_name,
+          min_bid: state.min_bid || 1,
+        })
+      }
+      if (state.current_highest_bid) {
+        setCurrentBid({
+          bidder_id: state.current_highest_bid.team_id,
+          bidder_name: state.current_highest_bid.team_name,
+          amount: state.current_highest_bid.amount,
+        })
+        setBidAmount(state.current_highest_bid.amount + (state.bid_increment || 1))
+      }
+      if (state.bid_timer_end) {
+        setBidTimerEnd(state.bid_timer_end)
+      }
     },
     onPickMade: (data) => {
       updatePick({
@@ -151,7 +189,13 @@ export default function DraftRoom() {
         pokemon_id: data.pokemon_id,
         pokemon_name: getPokemonName(data.pokemon_id),
         picked_at: new Date().toISOString(),
+        points_spent: data.points_spent,
       })
+      // Clear auction state after pick
+      setCurrentNomination(null)
+      setCurrentBid(null)
+      setBidTimerEnd(null)
+      setBidSecondsRemaining(null)
     },
     onDraftStarted: (data) => {
       // Update draft state when draft starts
@@ -177,7 +221,52 @@ export default function DraftRoom() {
     },
     onTimerTick: (data) => setSecondsRemaining(data.seconds_remaining),
     onError: (data) => console.error('Draft error:', data.message),
+    // Auction handlers
+    onNomination: (data) => {
+      setCurrentNomination({
+        pokemon_id: data.pokemon_id,
+        pokemon_name: data.pokemon_name,
+        nominator_id: data.nominator_id,
+        nominator_name: data.nominator_name,
+        min_bid: data.min_bid,
+      })
+      setCurrentBid({
+        bidder_id: data.current_bidder_id,
+        bidder_name: data.current_bidder_name,
+        amount: data.current_bid,
+      })
+      setBidTimerEnd(data.bid_timer_end)
+      setBidAmount(data.current_bid + (draftState?.bid_increment || 1))
+    },
+    onBidUpdate: (data) => {
+      setCurrentBid({
+        bidder_id: data.bidder_id,
+        bidder_name: data.bidder_name,
+        amount: data.amount,
+      })
+      setBidTimerEnd(data.bid_timer_end)
+      setBidAmount(data.amount + (draftState?.bid_increment || 1))
+    },
   })
+
+  // Bid timer countdown effect
+  useEffect(() => {
+    if (!bidTimerEnd) {
+      setBidSecondsRemaining(null)
+      return
+    }
+
+    const updateTimer = () => {
+      const end = new Date(bidTimerEnd).getTime()
+      const now = Date.now()
+      const remaining = Math.max(0, Math.ceil((end - now) / 1000))
+      setBidSecondsRemaining(remaining)
+    }
+
+    updateTimer()
+    const interval = setInterval(updateTimer, 100)
+    return () => clearInterval(interval)
+  }, [bidTimerEnd])
 
   const currentTeam = getCurrentTeam()
   const filteredPokemon = getFilteredPokemon()
@@ -187,10 +276,35 @@ export default function DraftRoom() {
   const myTeam = draftState?.teams.find(t => t.team_id === myTeamId)
   const isCreator = myTeam?.draft_position === 0
 
+  // Auction-specific computed values
+  const isAuction = draftState?.format === 'auction'
+  const isNominatingPhase = isAuction && !currentNomination
+  const isBiddingPhase = isAuction && currentNomination !== null
+  const isHighestBidder = currentBid && myTeamId === currentBid.bidder_id
+  const canAffordBid = myTeam && myTeam.budget_remaining !== undefined
+    ? myTeam.budget_remaining >= bidAmount
+    : true
+  const hasRosterSpace = myTeam
+    ? myTeam.pokemon.length < (draftState?.roster_size || 6)
+    : false
+
   const handleMakePick = () => {
     if (selectedPokemon && isMyTurn) {
       makePick(selectedPokemon.id)
       setSelectedPokemon(null)
+    }
+  }
+
+  const handleNominate = () => {
+    if (selectedPokemon && isMyTurn && isNominatingPhase) {
+      nominate(selectedPokemon.id)
+      setSelectedPokemon(null)
+    }
+  }
+
+  const handlePlaceBid = () => {
+    if (currentNomination && canAffordBid && hasRosterSpace && !isHighestBidder) {
+      placeBid(currentNomination.pokemon_id, bidAmount)
     }
   }
 
@@ -424,7 +538,7 @@ export default function DraftRoom() {
       </header>
 
       {/* Mobile: Your Pick sticky bar at bottom */}
-      {selectedPokemon && (
+      {selectedPokemon && !isBiddingPhase && (
         <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg z-40 p-3">
           <div className="flex items-center gap-3">
             <img
@@ -440,13 +554,60 @@ export default function DraftRoom() {
                 ))}
               </div>
             </div>
-            <button
-              onClick={handleMakePick}
-              className="btn btn-primary px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-              disabled={draftState.status !== 'live' || !isMyTurn}
-            >
-              {isMyTurn ? 'Pick' : 'Wait...'}
-            </button>
+            {isAuction && isNominatingPhase ? (
+              <button
+                onClick={handleNominate}
+                className="btn btn-primary px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                disabled={draftState.status !== 'live' || !isMyTurn || !hasRosterSpace}
+              >
+                {isMyTurn ? 'Nominate' : 'Wait...'}
+              </button>
+            ) : (
+              <button
+                onClick={handleMakePick}
+                className="btn btn-primary px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                disabled={draftState.status !== 'live' || !isMyTurn}
+              >
+                {isMyTurn ? 'Pick' : 'Wait...'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Mobile: Auction bid bar at bottom */}
+      {isBiddingPhase && currentNomination && currentBid && (
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg z-40 p-3">
+          <div className="flex items-center gap-3">
+            <img
+              src={getSpriteUrl(currentNomination.pokemon_id)}
+              alt={currentNomination.pokemon_name}
+              className="w-12 h-12"
+            />
+            <div className="flex-1 min-w-0">
+              <div className="font-bold capitalize truncate">{currentNomination.pokemon_name}</div>
+              <div className="text-sm">
+                {isHighestBidder ? (
+                  <span className="text-green-600">Winning: {currentBid.amount}</span>
+                ) : (
+                  <span className="text-gray-600">High: {currentBid.amount} ({currentBid.bidder_name})</span>
+                )}
+              </div>
+            </div>
+            {bidSecondsRemaining !== null && (
+              <span className={`text-lg font-bold ${bidSecondsRemaining <= 5 ? 'text-red-600' : 'text-gray-700'}`}>
+                {bidSecondsRemaining}s
+              </span>
+            )}
+            {!isHighestBidder && hasRosterSpace && (
+              <button
+                onClick={handlePlaceBid}
+                className="btn btn-primary px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                disabled={!canAffordBid}
+              >
+                Bid {bidAmount}
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -766,8 +927,101 @@ export default function DraftRoom() {
 
         {/* Selection Panel */}
         <div className="col-span-2">
+          {/* Auction: Active Bid Panel */}
+          {isAuction && isBiddingPhase && currentNomination && currentBid && (
+            <div className="card sticky top-6 mb-4 border-2 border-pokemon-blue">
+              <div className="flex justify-between items-center mb-2">
+                <h2 className="font-semibold text-pokemon-blue">Active Auction</h2>
+                {bidSecondsRemaining !== null && (
+                  <span className={`text-xl font-bold ${bidSecondsRemaining <= 5 ? 'text-red-600 animate-pulse' : 'text-gray-700'}`}>
+                    {bidSecondsRemaining}s
+                  </span>
+                )}
+              </div>
+              <div className="text-center">
+                <img
+                  src={getSpriteUrl(currentNomination.pokemon_id)}
+                  alt={currentNomination.pokemon_name}
+                  className="w-20 h-20 mx-auto"
+                />
+                <div className="text-lg font-bold capitalize">
+                  {currentNomination.pokemon_name}
+                </div>
+                <div className="text-xs text-gray-500 mb-3">
+                  Nominated by {currentNomination.nominator_name}
+                </div>
+
+                {/* Current High Bid */}
+                <div className={`p-3 rounded-lg mb-3 ${isHighestBidder ? 'bg-green-100' : 'bg-gray-100'}`}>
+                  <div className="text-sm text-gray-600">Current Bid</div>
+                  <div className="text-2xl font-bold">{currentBid.amount}</div>
+                  <div className="text-sm">
+                    {isHighestBidder ? (
+                      <span className="text-green-600 font-medium">You are winning!</span>
+                    ) : (
+                      <span className="text-gray-600">{currentBid.bidder_name}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Bid Controls */}
+                {!isHighestBidder && hasRosterSpace && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setBidAmount(Math.max(currentBid.amount + (draftState?.bid_increment || 1), bidAmount - (draftState?.bid_increment || 1)))}
+                        className="btn btn-secondary px-3 py-1"
+                        disabled={bidAmount <= currentBid.amount + (draftState?.bid_increment || 1)}
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        value={bidAmount}
+                        onChange={(e) => setBidAmount(Math.max(currentBid.amount + (draftState?.bid_increment || 1), Number(e.target.value)))}
+                        className="input text-center w-20"
+                        min={currentBid.amount + (draftState?.bid_increment || 1)}
+                      />
+                      <button
+                        onClick={() => setBidAmount(bidAmount + (draftState?.bid_increment || 1))}
+                        className="btn btn-secondary px-3 py-1"
+                        disabled={!canAffordBid}
+                      >
+                        +
+                      </button>
+                    </div>
+                    <button
+                      onClick={handlePlaceBid}
+                      className="btn btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={!canAffordBid || bidAmount <= currentBid.amount}
+                    >
+                      {canAffordBid ? `Bid ${bidAmount}` : 'Cannot Afford'}
+                    </button>
+                    {myTeam?.budget_remaining !== undefined && (
+                      <div className="text-xs text-gray-500">
+                        Your budget: {myTeam.budget_remaining}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {isHighestBidder && (
+                  <div className="text-sm text-green-600 mt-2">
+                    Waiting for other bids...
+                  </div>
+                )}
+                {!hasRosterSpace && !isHighestBidder && (
+                  <div className="text-sm text-red-600 mt-2">
+                    Your roster is full
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="card sticky top-6">
-            <h2 className="font-semibold text-gray-700 mb-4">Your Pick</h2>
+            <h2 className="font-semibold text-gray-700 mb-4">
+              {isAuction ? (isNominatingPhase ? 'Nominate' : 'Your Selection') : 'Your Pick'}
+            </h2>
             {selectedPokemon ? (
               <div className="text-center">
                 <div className="relative inline-block">
@@ -833,17 +1087,32 @@ export default function DraftRoom() {
                     </span>
                   </div>
                 )}
-                <button
-                  onClick={handleMakePick}
-                  className="btn btn-primary w-full mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={draftState.status !== 'live' || !isMyTurn}
-                >
-                  {isMyTurn ? 'Confirm Pick' : "Waiting for your turn..."}
-                </button>
+                {/* Auction: Nominate button */}
+                {isAuction && isNominatingPhase && (
+                  <button
+                    onClick={handleNominate}
+                    className="btn btn-primary w-full mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={draftState.status !== 'live' || !isMyTurn || !hasRosterSpace}
+                  >
+                    {!hasRosterSpace ? 'Roster Full' : isMyTurn ? 'Nominate' : `Waiting for ${currentTeam?.display_name || 'next team'}...`}
+                  </button>
+                )}
+                {/* Regular draft: Confirm Pick button */}
+                {!isAuction && (
+                  <button
+                    onClick={handleMakePick}
+                    className="btn btn-primary w-full mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={draftState.status !== 'live' || !isMyTurn}
+                  >
+                    {isMyTurn ? 'Confirm Pick' : "Waiting for your turn..."}
+                  </button>
+                )}
               </div>
             ) : (
               <p className="text-gray-500 text-center">
-                Select a Pokemon to pick
+                {isAuction && isBiddingPhase
+                  ? 'Auction in progress above'
+                  : 'Select a Pokemon'}
               </p>
             )}
           </div>

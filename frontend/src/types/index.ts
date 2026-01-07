@@ -76,6 +76,7 @@ export interface Draft {
   completed_at?: string
   // Auction-specific settings
   nomination_timer_seconds?: number
+  bid_timer_seconds?: number
   min_bid?: number
   bid_increment?: number
 }
@@ -111,8 +112,23 @@ export interface DraftState {
   budget_per_team?: number
   // Auction-specific settings
   nomination_timer_seconds?: number
+  bid_timer_seconds?: number
   min_bid?: number
   bid_increment?: number
+  // Auction state (populated during auction)
+  auction_phase?: 'nominating' | 'bidding' | 'idle'
+  current_nomination?: {
+    pokemon_id: number
+    pokemon_name: string
+    nominator_id: string
+    nominator_name: string
+  }
+  current_highest_bid?: {
+    team_id: string
+    team_name: string
+    amount: number
+  }
+  bid_timer_end?: string
 }
 
 export interface DraftTeam {
@@ -366,10 +382,11 @@ export type TradeWebSocketEvent =
 // WebSocket event types
 export type WebSocketEvent =
   | { event: 'draft_state'; data: DraftState }
-  | { event: 'pick_made'; data: { team_id: string; pokemon_id: number; pick_number: number } }
-  | { event: 'turn_start'; data: { team_id: string; timer_end: string } }
+  | { event: 'pick_made'; data: { team_id: string; pokemon_id: number; pick_number: number; points_spent?: number } }
+  | { event: 'turn_start'; data: { team_id: string; timer_end?: string; phase?: string } }
   | { event: 'timer_tick'; data: { seconds_remaining: number } }
-  | { event: 'bid_update'; data: { pokemon_id: number; bidder_id: string; amount: number } }
+  | { event: 'bid_update'; data: { pokemon_id: number; bidder_id: string; bidder_name: string; amount: number; bid_timer_end: string } }
+  | { event: 'nomination'; data: { pokemon_id: number; pokemon_name: string; nominator_id: string; nominator_name: string; min_bid: number; current_bid: number; current_bidder_id: string; current_bidder_name: string; bid_timer_end: string } }
   | { event: 'draft_complete'; data: { final_teams: DraftTeam[] } }
   | { event: 'draft_started'; data: { status: string; pick_order: string[]; current_team_id: string; current_team_name: string; timer_end?: string } }
   | { event: 'user_joined'; data: { team_id: string; display_name: string } }

@@ -6,14 +6,33 @@ interface UseWebSocketOptions {
   teamId?: string | null
   sessionToken?: string | null
   onStateUpdate?: (state: DraftState) => void
-  onPickMade?: (data: { team_id: string; pokemon_id: number; pick_number: number }) => void
-  onTurnStart?: (data: { team_id: string; timer_end: string }) => void
+  onPickMade?: (data: { team_id: string; pokemon_id: number; pick_number: number; points_spent?: number }) => void
+  onTurnStart?: (data: { team_id: string; timer_end?: string; phase?: string }) => void
   onTimerTick?: (data: { seconds_remaining: number }) => void
   onDraftComplete?: (data: { final_teams: unknown[] }) => void
   onDraftStarted?: (data: { status: string; pick_order: string[]; current_team_id: string; current_team_name: string; timer_end?: string }) => void
   onUserJoined?: (data: { team_id: string; display_name: string }) => void
   onUserLeft?: (data: { team_id: string; display_name: string }) => void
   onError?: (data: { message: string; code: string }) => void
+  // Auction-specific callbacks
+  onNomination?: (data: {
+    pokemon_id: number
+    pokemon_name: string
+    nominator_id: string
+    nominator_name: string
+    min_bid: number
+    current_bid: number
+    current_bidder_id: string
+    current_bidder_name: string
+    bid_timer_end: string
+  }) => void
+  onBidUpdate?: (data: {
+    pokemon_id: number
+    bidder_id: string
+    bidder_name: string
+    amount: number
+    bid_timer_end: string
+  }) => void
 }
 
 export function useWebSocket({
@@ -29,6 +48,8 @@ export function useWebSocket({
   onUserJoined,
   onUserLeft,
   onError,
+  onNomination,
+  onBidUpdate,
 }: UseWebSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null)
   const [isConnected, setIsConnected] = useState(false)
@@ -47,6 +68,8 @@ export function useWebSocket({
     onUserJoined,
     onUserLeft,
     onError,
+    onNomination,
+    onBidUpdate,
   })
 
   // Update callbacks ref when they change
@@ -61,8 +84,10 @@ export function useWebSocket({
       onUserJoined,
       onUserLeft,
       onError,
+      onNomination,
+      onBidUpdate,
     }
-  }, [onStateUpdate, onPickMade, onTurnStart, onTimerTick, onDraftComplete, onDraftStarted, onUserJoined, onUserLeft, onError])
+  }, [onStateUpdate, onPickMade, onTurnStart, onTimerTick, onDraftComplete, onDraftStarted, onUserJoined, onUserLeft, onError, onNomination, onBidUpdate])
 
   const connect = useCallback(() => {
     // Clear any pending reconnect timeout
@@ -150,6 +175,12 @@ export function useWebSocket({
             break
           case 'error':
             callbacks.onError?.(message.data)
+            break
+          case 'nomination':
+            callbacks.onNomination?.(message.data)
+            break
+          case 'bid_update':
+            callbacks.onBidUpdate?.(message.data)
             break
         }
       } catch (error) {

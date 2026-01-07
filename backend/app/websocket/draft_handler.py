@@ -3,6 +3,7 @@ from uuid import UUID
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict
 import logging
+import asyncio
 
 from sqlalchemy import select
 
@@ -42,6 +43,12 @@ async def load_draft_state(draft_id: UUID, room: DraftRoom):
         room.budget_per_team = draft.budget_per_team
         room.current_pick = draft.current_pick
         room.rejoin_code = draft.rejoin_code
+
+        # Load auction-specific settings
+        room.nomination_timer_seconds = draft.nomination_timer_seconds
+        room.bid_timer_seconds = draft.bid_timer_seconds or 15
+        room.min_bid = draft.min_bid or 1
+        room.bid_increment = draft.bid_increment or 1
 
         # Load pokemon pool
         room.available_pokemon = []
@@ -558,10 +565,43 @@ async def handle_bid(websocket: WebSocket, draft_id: UUID, data: dict):
 
     room = await manager.get_or_create_room(draft_id)
 
+    # Verify auction format
     if room.format != "auction":
         await websocket.send_json({
             "event": "error",
             "data": {"message": "This is not an auction draft", "code": "NOT_AUCTION"},
+        })
+        return
+
+    # Verify draft is live
+    if room.status != "live":
+        await websocket.send_json({
+            "event": "error",
+            "data": {"message": "Draft is not live", "code": "DRAFT_NOT_LIVE"},
+        })
+        return
+
+    # Verify we're in bidding phase
+    if room.auction_phase != "bidding":
+        await websocket.send_json({
+            "event": "error",
+            "data": {"message": "No active auction to bid on", "code": "NO_ACTIVE_AUCTION"},
+        })
+        return
+
+    # Verify there's an active nomination
+    if not room.current_nomination:
+        await websocket.send_json({
+            "event": "error",
+            "data": {"message": "No Pokemon is currently nominated", "code": "NO_NOMINATION"},
+        })
+        return
+
+    # Verify bidding on the correct pokemon
+    if room.current_nomination["pokemon_id"] != pokemon_id:
+        await websocket.send_json({
+            "event": "error",
+            "data": {"message": "Invalid pokemon_id for current auction", "code": "WRONG_POKEMON"},
         })
         return
 
@@ -573,6 +613,22 @@ async def handle_bid(websocket: WebSocket, draft_id: UUID, data: dict):
         })
         return
 
+    # Verify not bidding against yourself
+    if room.current_highest_bid and room.current_highest_bid["team_id"] == str(team_id):
+        await websocket.send_json({
+            "event": "error",
+            "data": {"message": "You already have the highest bid", "code": "ALREADY_HIGHEST_BIDDER"},
+        })
+        return
+
+    # Verify team has roster space
+    if not room.has_roster_space(team_id):
+        await websocket.send_json({
+            "event": "error",
+            "data": {"message": "Your roster is full", "code": "ROSTER_FULL"},
+        })
+        return
+
     # Verify budget
     if not room.can_afford(team_id, amount):
         await websocket.send_json({
@@ -581,7 +637,39 @@ async def handle_bid(websocket: WebSocket, draft_id: UUID, data: dict):
         })
         return
 
-    # Track current bid (simplified - would need more state for full auction)
+    # Verify bid meets minimum
+    if amount < room.min_bid:
+        await websocket.send_json({
+            "event": "error",
+            "data": {"message": f"Bid must be at least {room.min_bid}", "code": "BID_TOO_LOW"},
+        })
+        return
+
+    # Verify bid increment
+    current_bid = room.current_highest_bid["amount"] if room.current_highest_bid else 0
+    min_required = current_bid + room.bid_increment
+    if amount < min_required:
+        await websocket.send_json({
+            "event": "error",
+            "data": {"message": f"Bid must be at least {min_required} (current: {current_bid} + increment: {room.bid_increment})", "code": "INSUFFICIENT_INCREMENT"},
+        })
+        return
+
+    # Place the bid
+    room.place_auction_bid(team_id, amount)
+
+    # Reset bid timer
+    room.timer_end = datetime.now(timezone.utc) + timedelta(seconds=room.bid_timer_seconds)
+
+    # Cancel existing timer and start new one
+    if room.bid_timer_task:
+        room.bid_timer_task.cancel()
+
+    room.bid_timer_task = asyncio.create_task(
+        run_bid_timer(draft_id, room.bid_timer_seconds, pokemon_id)
+    )
+
+    # Broadcast bid update
     await manager.broadcast(draft_id, {
         "event": "bid_update",
         "data": {
@@ -589,6 +677,7 @@ async def handle_bid(websocket: WebSocket, draft_id: UUID, data: dict):
             "bidder_id": str(team_id),
             "bidder_name": room.participants[team_id].display_name,
             "amount": amount,
+            "bid_timer_end": room.timer_end.isoformat(),
         },
     })
 
@@ -606,10 +695,19 @@ async def handle_nominate(websocket: WebSocket, draft_id: UUID, data: dict):
 
     room = await manager.get_or_create_room(draft_id)
 
+    # Verify auction format
     if room.format != "auction":
         await websocket.send_json({
             "event": "error",
             "data": {"message": "This is not an auction draft", "code": "NOT_AUCTION"},
+        })
+        return
+
+    # Verify draft is live
+    if room.status != "live":
+        await websocket.send_json({
+            "event": "error",
+            "data": {"message": "Draft is not live", "code": "DRAFT_NOT_LIVE"},
         })
         return
 
@@ -621,6 +719,23 @@ async def handle_nominate(websocket: WebSocket, draft_id: UUID, data: dict):
         })
         return
 
+    # Verify no active nomination
+    if room.current_nomination is not None:
+        await websocket.send_json({
+            "event": "error",
+            "data": {"message": "There is already an active nomination", "code": "NOMINATION_ACTIVE"},
+        })
+        return
+
+    # Verify it's this team's turn to nominate
+    nominating_team = room.get_nominating_team()
+    if nominating_team != team_id:
+        await websocket.send_json({
+            "event": "error",
+            "data": {"message": "It's not your turn to nominate", "code": "NOT_YOUR_TURN"},
+        })
+        return
+
     # Verify pokemon is available
     if not room.is_pokemon_available(pokemon_id):
         await websocket.send_json({
@@ -629,18 +744,156 @@ async def handle_nominate(websocket: WebSocket, draft_id: UUID, data: dict):
         })
         return
 
+    # Verify nominator has roster space
+    if not room.has_roster_space(team_id):
+        await websocket.send_json({
+            "event": "error",
+            "data": {"message": "Your roster is full", "code": "ROSTER_FULL"},
+        })
+        return
+
+    # Verify nominator can afford min_bid (for auto-bid)
+    if not room.can_afford(team_id, room.min_bid):
+        await websocket.send_json({
+            "event": "error",
+            "data": {"message": "Cannot afford minimum bid", "code": "INSUFFICIENT_BUDGET"},
+        })
+        return
+
+    # Get pokemon data
     pokemon_data = next(
         (p for p in room.available_pokemon if p["pokemon_id"] == pokemon_id),
         {"name": "Unknown"}
     )
+    pokemon_name = pokemon_data.get("name", "Unknown")
 
+    # Start the nomination (auto-bids at min_bid)
+    room.start_nomination(pokemon_id, pokemon_name, team_id)
+
+    # Start bid timer
+    room.timer_end = datetime.now(timezone.utc) + timedelta(seconds=room.bid_timer_seconds)
+
+    # Cancel any existing timer task
+    if room.bid_timer_task:
+        room.bid_timer_task.cancel()
+
+    # Create new timer task
+    room.bid_timer_task = asyncio.create_task(
+        run_bid_timer(draft_id, room.bid_timer_seconds, pokemon_id)
+    )
+
+    # Broadcast nomination event
     await manager.broadcast(draft_id, {
         "event": "nomination",
         "data": {
             "pokemon_id": pokemon_id,
-            "pokemon_name": pokemon_data.get("name", "Unknown"),
+            "pokemon_name": pokemon_name,
             "nominator_id": str(team_id),
             "nominator_name": room.participants[team_id].display_name,
-            "min_bid": 1,
+            "min_bid": room.min_bid,
+            "current_bid": room.min_bid,
+            "current_bidder_id": str(team_id),
+            "current_bidder_name": room.participants[team_id].display_name,
+            "bid_timer_end": room.timer_end.isoformat(),
         },
     })
+
+
+async def run_bid_timer(draft_id: UUID, seconds: int, pokemon_id: int):
+    """Run the bid timer and complete auction when it expires."""
+    try:
+        await asyncio.sleep(seconds)
+        await complete_auction(draft_id, pokemon_id)
+    except asyncio.CancelledError:
+        # Timer was cancelled (new bid placed), this is expected
+        pass
+
+
+async def complete_auction(draft_id: UUID, pokemon_id: int):
+    """Complete an auction and award the pokemon to the highest bidder."""
+    room = await manager.get_or_create_room(draft_id)
+
+    # Verify auction is still active for this pokemon
+    if not room.current_nomination or room.current_nomination["pokemon_id"] != pokemon_id:
+        return
+
+    if not room.current_highest_bid:
+        # No bids - shouldn't happen since nominator auto-bids
+        room.clear_auction_state()
+        return
+
+    # Get winning team info
+    winner_team_id = UUID(room.current_highest_bid["team_id"])
+    winner_team_name = room.current_highest_bid["team_name"]
+    winning_amount = room.current_highest_bid["amount"]
+    pokemon_name = room.current_nomination["pokemon_name"]
+
+    # Make the pick (this handles budget deduction and roster addition)
+    try:
+        pick = room.make_pick(winner_team_id, pokemon_id, winning_amount)
+
+        # Get full pokemon data for removal from available
+        room.available_pokemon = [
+            p for p in room.available_pokemon if p["pokemon_id"] != pokemon_id
+        ]
+
+        # Save to database
+        await save_pick_to_db(draft_id, winner_team_id, pokemon_id, pick.pick_number, winning_amount)
+
+        # Broadcast pick made
+        await manager.broadcast(draft_id, {
+            "event": "pick_made",
+            "data": {
+                "team_id": str(winner_team_id),
+                "team_name": winner_team_name,
+                "pokemon_id": pokemon_id,
+                "pokemon_name": pokemon_name,
+                "pick_number": pick.pick_number,
+                "points_spent": winning_amount,
+            },
+        })
+
+        # Clear auction state
+        room.clear_auction_state()
+
+        # Check if draft is complete
+        if room.status == "completed":
+            await complete_draft_in_db(draft_id)
+            await manager.broadcast(draft_id, {
+                "event": "draft_complete",
+                "data": {
+                    "teams": [
+                        {
+                            "team_id": str(p.team_id),
+                            "display_name": p.display_name,
+                            "pokemon": p.pokemon,
+                            "budget_remaining": p.budget_remaining,
+                        }
+                        for p in room.participants.values()
+                    ],
+                },
+            })
+        else:
+            # Advance to next nominator
+            room.advance_nominating_team()
+            next_team = room.get_nominating_team()
+
+            if next_team:
+                # Broadcast turn start for next nominator
+                await manager.broadcast(draft_id, {
+                    "event": "turn_start",
+                    "data": {
+                        "team_id": str(next_team),
+                        "team_name": room.participants[next_team].display_name,
+                        "phase": "nominating",
+                    },
+                })
+
+    except ValueError as e:
+        # Pick failed for some reason - log and notify
+        logger.error(f"Auction completion failed for draft {draft_id}: {e}")
+        room.clear_auction_state()
+        await manager.broadcast(draft_id, {
+            "event": "error",
+            "data": {"message": f"Auction failed: {str(e)}", "code": "AUCTION_ERROR"},
+        })
