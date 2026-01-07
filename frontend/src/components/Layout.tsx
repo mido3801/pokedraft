@@ -139,7 +139,7 @@ export default function Layout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center">
             <p className="text-sm">
-              Pokemon Draft League Platform
+              PokeDraft
             </p>
             <div className="flex space-x-6 text-sm">
               <a href="#" className="hover:text-white">About</a>

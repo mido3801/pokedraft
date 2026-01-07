@@ -37,6 +37,7 @@ def generate_rejoin_code() -> str:
     pokemon_prefixes = [
         "PIKA", "CHAR", "BULB", "SQRT", "EEVEE",
         "JIGG", "MEOW", "PSYD", "SLWP", "GENR",
+        "UMBR", "FLAR", "JOLT", "SPND", "TYRN"
     ]
     prefix = secrets.choice(pokemon_prefixes)
     number = secrets.randbelow(9000) + 1000

@@ -18,32 +18,6 @@ export const TEMPLATE_PRESETS: Record<string, TemplatePreset> = {
     description: 'Include all Pokemon from all generations',
     filters: {},
   },
-  ou: {
-    id: 'ou',
-    name: 'OU (OverUsed)',
-    description: 'Standard competitive format with all fully evolved Pokemon',
-    filters: {
-      evolution_stages: [2], // Fully evolved only
-    },
-  },
-  uu: {
-    id: 'uu',
-    name: 'UU (UnderUsed)',
-    description: 'Lower tier competitive format, excludes legendaries',
-    filters: {
-      evolution_stages: [2],
-      include_legendary: false,
-      include_mythical: false,
-    },
-  },
-  monotype: {
-    id: 'monotype',
-    name: 'Monotype',
-    description: 'All Pokemon, typically used with type restrictions',
-    filters: {
-      // No specific filters - type selection is usually done per-team
-    },
-  },
   little_cup: {
     id: 'little_cup',
     name: 'Little Cup',
@@ -53,52 +27,6 @@ export const TEMPLATE_PRESETS: Record<string, TemplatePreset> = {
       include_legendary: false,
       include_mythical: false,
       bst_max: 500, // LC typically has BST limits
-    },
-  },
-  draft_league: {
-    id: 'draft_league',
-    name: 'Draft League',
-    description: 'Standard draft league format with point values',
-    filters: {
-      evolution_stages: [2],
-    },
-    rosterSize: 11,
-    budgetEnabled: true,
-    budgetPerTeam: 100,
-  },
-  nfe: {
-    id: 'nfe',
-    name: 'NFE (Not Fully Evolved)',
-    description: 'Pokemon that can still evolve',
-    filters: {
-      evolution_stages: [0, 1], // Unevolved and middle stage
-      include_legendary: false,
-      include_mythical: false,
-    },
-  },
-  gen1: {
-    id: 'gen1',
-    name: 'Gen 1 Only',
-    description: 'Kanto Pokemon only (Generation 1)',
-    filters: {
-      generations: [1],
-    },
-  },
-  gen1to3: {
-    id: 'gen1to3',
-    name: 'Gens 1-3',
-    description: 'Classic Pokemon (Kanto, Johto, Hoenn)',
-    filters: {
-      generations: [1, 2, 3],
-    },
-  },
-  no_legends: {
-    id: 'no_legends',
-    name: 'No Legendaries',
-    description: 'All Pokemon except Legendaries and Mythicals',
-    filters: {
-      include_legendary: false,
-      include_mythical: false,
     },
   },
 }

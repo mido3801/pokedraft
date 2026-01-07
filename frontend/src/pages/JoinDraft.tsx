@@ -24,7 +24,7 @@ export default function JoinDraft() {
     setError('')
 
     if (!rejoinCode.trim()) {
-      setError('Please enter a rejoin code')
+      setError('Please enter an invite code')
       return
     }
 
@@ -60,12 +60,12 @@ export default function JoinDraft() {
     <div className="max-w-md mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <h1 className="text-3xl font-bold text-gray-900 mb-2 text-center">Join a Draft</h1>
       <p className="text-gray-600 mb-8 text-center">
-        Enter your rejoin code to join an active draft session.
+        Enter your Invite code to join an active draft session.
       </p>
 
       <form onSubmit={handleSubmit} className="card space-y-6">
         <div>
-          <label className="label">Rejoin Code</label>
+          <label className="label">Invite Code</label>
           <input
             type="text"
             value={rejoinCode}

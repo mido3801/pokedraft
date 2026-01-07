@@ -32,12 +32,12 @@ export const leagueService = {
     return api.put<League>(`/leagues/${leagueId}`, params)
   },
 
-  async joinLeague(leagueId: string, inviteCode?: string): Promise<League> {
-    return api.post<League>(`/leagues/${leagueId}/join${inviteCode ? `?invite_code=${inviteCode}` : ''}`)
+  async joinLeague(leagueId: string, code?: string): Promise<League> {
+    return api.post<League>(`/leagues/${leagueId}/join${code ? `?code=${code}` : ''}`)
   },
 
-  async joinLeagueByCode(inviteCode: string): Promise<League> {
-    return api.post<League>(`/leagues/join-by-code?invite_code=${encodeURIComponent(inviteCode)}`)
+  async joinLeagueByCode(code: string): Promise<League> {
+    return api.post<League>(`/leagues/join-by-code?code=${encodeURIComponent(code)}`)
   },
 
   async leaveLeague(leagueId: string): Promise<void> {

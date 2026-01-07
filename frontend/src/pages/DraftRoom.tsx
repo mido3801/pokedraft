@@ -282,7 +282,7 @@ export default function DraftRoom() {
             <div className="space-y-4">
               {draftState?.rejoin_code && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Rejoin Code</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Invite Code</label>
                   <div className="flex gap-2">
                     <div className="input text-center text-2xl tracking-widest font-bold flex-1 bg-gray-50">
                       {draftState.rejoin_code}

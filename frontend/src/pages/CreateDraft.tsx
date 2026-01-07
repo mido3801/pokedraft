@@ -318,7 +318,7 @@ export default function CreateDraft() {
 
         <div className="card space-y-6">
           <div>
-            <label className="label">Rejoin Code</label>
+            <label className="label">Invite Code</label>
             <div className="flex gap-2">
               <div className="input text-center text-2xl tracking-widest font-bold flex-1 bg-gray-50">
                 {createdDraft.rejoinCode}

@@ -123,7 +123,7 @@ async def update_league(
 @router.post("/{league_id}/join", response_model=League)
 async def join_league(
     league_id: UUID,
-    invite_code: str = Query(None, description="Invite code for private leagues"),
+    code: str = Query(None, description="Invite code for the league"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -147,7 +147,7 @@ async def join_league(
             await db.commit()
     else:
         # Validate invite code
-        if not invite_code or invite_code != league.invite_code:
+        if not code or code != league.invite_code:
             raise forbidden("Invalid invite code")
 
         # Create membership
@@ -164,14 +164,14 @@ async def join_league(
 
 @router.post("/join-by-code", response_model=League)
 async def join_league_by_code(
-    invite_code: str = Query(..., description="Invite code for the league"),
+    code: str = Query(..., description="Invite code for the league"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Join a league using only the invite code."""
     # Look up the league by invite code
     result = await db.execute(
-        select(LeagueModel).where(LeagueModel.invite_code == invite_code)
+        select(LeagueModel).where(LeagueModel.invite_code == code)
     )
     league = result.scalar_one_or_none()
 
@@ -316,7 +316,7 @@ async def regenerate_invite(
 
     return {
         "invite_code": league.invite_code,
-        "invite_url": f"/leagues/{league_id}/join?invite_code={league.invite_code}",
+        "invite_url": f"/leagues/{league_id}/join?code={league.invite_code}",
     }
 
 
