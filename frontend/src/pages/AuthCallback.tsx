@@ -18,8 +18,22 @@ export default function AuthCallback() {
         return
       }
 
-      // Supabase handles the session extraction from URL hash automatically
-      // Just verify we have a session
+      // Check for PKCE code in URL params - this needs to be exchanged for a session
+      const code = searchParams.get('code')
+      if (code) {
+        const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+        if (exchangeError) {
+          console.error('Code exchange error:', exchangeError)
+          setError(exchangeError.message)
+          return
+        }
+        if (data.session) {
+          navigate('/dashboard', { replace: true })
+          return
+        }
+      }
+
+      // No code param - check for existing session (hash-based flow or already authenticated)
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
 
       if (sessionError) {
