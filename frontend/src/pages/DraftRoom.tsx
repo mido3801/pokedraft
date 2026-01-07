@@ -113,6 +113,7 @@ export default function DraftRoom() {
   } = useDraftStore()
 
   const [showFilters, setShowFilters] = useState(false)
+  const [showTeamsPanel, setShowTeamsPanel] = useState(false)
 
   // Cleanup on unmount
   useEffect(() => {
@@ -339,126 +340,253 @@ export default function DraftRoom() {
 
       {/* Header */}
       <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-xl font-bold">Draft Room</h1>
-            {draftState.status === 'completed' ? (
-              <p className="text-sm text-green-600 font-medium">Draft Complete!</p>
-            ) : draftState.status === 'pending' ? (
-              <p className="text-sm text-gray-500">
-                {draftState.teams.length} team{draftState.teams.length !== 1 ? 's' : ''} joined
-                {draftState.teams.length < 2 && ' (need at least 2 to start)'}
-              </p>
-            ) : (
-              <p className="text-sm text-gray-500">
-                Pick {draftState.current_pick + 1} of {draftState.teams.length * draftState.roster_size}
-              </p>
-            )}
-          </div>
-          <div className="flex items-center space-x-4">
-            {isCreator && draftState.status === 'pending' && (
-              <button
-                onClick={startDraft}
-                disabled={draftState.teams.length < 2}
-                className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-medium transition-colors"
-              >
-                Start Draft
-              </button>
-            )}
-            {draftState.status === 'pending' && !isCreator && (
-              <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium">
-                Waiting for host to start...
-              </span>
-            )}
-            {isMyTurn && draftState.status === 'live' && (
-              <span className="bg-pokemon-blue text-white px-3 py-1 rounded-full text-sm font-medium animate-pulse">
-                Your Turn!
-              </span>
-            )}
-            <select
-              value={spriteStyle}
-              onChange={(e) => setSpriteStyle(e.target.value as 'default' | 'official-artwork' | 'home')}
-              className="text-sm border border-gray-300 rounded-lg px-2 py-1 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-pokemon-blue"
-              title="Sprite style"
-            >
-              <option value="default">{getSpriteStyleLabel('default')}</option>
-              <option value="official-artwork">{getSpriteStyleLabel('official-artwork')}</option>
-              <option value="home">{getSpriteStyleLabel('home')}</option>
-            </select>
-            <button
-              onClick={() => setShowShareModal(true)}
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Share draft"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-              </svg>
-            </button>
-            <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} title={isConnected ? 'Connected' : 'Disconnected'} />
-            {secondsRemaining !== null && draftState.status === 'live' && (
-              <div className={`text-2xl font-bold ${secondsRemaining < 10 ? 'text-red-600' : ''}`}>
-                {secondsRemaining}s
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          {/* Top row: Title and timer/status */}
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <div>
+                <h1 className="text-lg sm:text-xl font-bold">Draft Room</h1>
+                {draftState.status === 'completed' ? (
+                  <p className="text-sm text-green-600 font-medium">Draft Complete!</p>
+                ) : draftState.status === 'pending' ? (
+                  <p className="text-xs sm:text-sm text-gray-500">
+                    {draftState.teams.length} team{draftState.teams.length !== 1 ? 's' : ''} joined
+                    <span className="hidden sm:inline">
+                      {draftState.teams.length < 2 && ' (need at least 2 to start)'}
+                    </span>
+                  </p>
+                ) : (
+                  <p className="text-xs sm:text-sm text-gray-500">
+                    Pick {draftState.current_pick + 1} of {draftState.teams.length * draftState.roster_size}
+                  </p>
+                )}
               </div>
-            )}
+            </div>
+            <div className="flex items-center gap-2 sm:gap-4">
+              {/* Timer - always visible when live */}
+              {secondsRemaining !== null && draftState.status === 'live' && (
+                <div className={`text-xl sm:text-2xl font-bold ${secondsRemaining < 10 ? 'text-red-600' : ''}`}>
+                  {secondsRemaining}s
+                </div>
+              )}
+              {/* Your Turn indicator */}
+              {isMyTurn && draftState.status === 'live' && (
+                <span className="bg-pokemon-blue text-white px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium animate-pulse whitespace-nowrap">
+                  Your Turn!
+                </span>
+              )}
+              {/* Connection status */}
+              <div className={`w-3 h-3 rounded-full flex-shrink-0 ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} title={isConnected ? 'Connected' : 'Disconnected'} />
+            </div>
+          </div>
+
+          {/* Bottom row: Actions and controls */}
+          <div className="flex items-center justify-between mt-2 gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {isCreator && draftState.status === 'pending' && (
+                <button
+                  onClick={startDraft}
+                  disabled={draftState.teams.length < 2}
+                  className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                >
+                  Start Draft
+                </button>
+              )}
+              {draftState.status === 'pending' && !isCreator && (
+                <span className="bg-yellow-100 text-yellow-800 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium">
+                  Waiting for host...
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={spriteStyle}
+                onChange={(e) => setSpriteStyle(e.target.value as 'default' | 'official-artwork' | 'home')}
+                className="text-xs sm:text-sm border border-gray-300 rounded-lg px-2 py-1 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-pokemon-blue"
+                title="Sprite style"
+              >
+                <option value="default">{getSpriteStyleLabel('default')}</option>
+                <option value="official-artwork">{getSpriteStyleLabel('official-artwork')}</option>
+                <option value="home">{getSpriteStyleLabel('home')}</option>
+              </select>
+              <button
+                onClick={() => setShowShareModal(true)}
+                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Share draft"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
-      <div className="mx-auto px-4 py-4 grid grid-cols-12 gap-4">
-        {/* Teams Panel */}
-        <div className="col-span-2 space-y-3">
-          <h2 className="font-semibold text-gray-700">Teams</h2>
-          {draftState.teams.map((team) => {
-            const isCurrentTurn = currentTeam?.team_id === team.team_id
-            const isMyTeam = myTeamId === team.team_id
-            return (
-              <div
-                key={team.team_id}
-                className={`card p-3 ${isCurrentTurn ? 'ring-2 ring-pokemon-blue' : ''} ${isMyTeam ? 'bg-blue-50' : ''}`}
-              >
-                <div className="flex justify-between items-center mb-1">
-                  <span className="font-medium text-sm truncate">
-                    {team.display_name}
-                    {isMyTeam && <span className="text-xs text-pokemon-blue ml-1">(You)</span>}
-                  </span>
-                  <span className="text-xs text-gray-500">
-                    {team.pokemon.length}/{draftState.roster_size}
-                  </span>
-                </div>
-                {draftState.budget_enabled && (
-                  <div className="text-sm text-gray-500">
-                    Budget: {team.budget_remaining}
-                  </div>
-                )}
-                <div className="mt-2 flex flex-wrap gap-0.5">
-                  {team.pokemon.map((pokemonId) => {
-                    const pokemon = draftState.picks.find(p => p.pokemon_id === pokemonId)
-                    return (
-                      <img
-                        key={pokemonId}
-                        src={getSpriteUrl(pokemonId)}
-                        alt={pokemon?.pokemon_name || `#${pokemonId}`}
-                        title={pokemon?.pokemon_name || `#${pokemonId}`}
-                        className="w-8 h-8"
-                      />
-                    )
-                  })}
-                </div>
-                {draftState.status === 'completed' && (
-                  <button
-                    onClick={() => handleExport(team.team_id)}
-                    className="btn btn-secondary text-xs w-full mt-2"
-                  >
-                    Export Team
-                  </button>
-                )}
+      {/* Mobile: Your Pick sticky bar at bottom */}
+      {selectedPokemon && (
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg z-40 p-3">
+          <div className="flex items-center gap-3">
+            <img
+              src={getSpriteUrl(selectedPokemon.id)}
+              alt={selectedPokemon.name}
+              className="w-12 h-12"
+            />
+            <div className="flex-1 min-w-0">
+              <div className="font-bold capitalize truncate">{selectedPokemon.name}</div>
+              <div className="flex gap-1">
+                {selectedPokemon.types.map((type) => (
+                  <TypeBadge key={type} type={type} />
+                ))}
               </div>
-            )
-          })}
+            </div>
+            <button
+              onClick={handleMakePick}
+              className="btn btn-primary px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              disabled={draftState.status !== 'live' || !isMyTurn}
+            >
+              {isMyTurn ? 'Pick' : 'Wait...'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="mx-auto px-2 sm:px-4 py-4 pb-24 lg:pb-4">
+        {/* Mobile: Collapsible Teams Panel */}
+        <div className="lg:hidden mb-4">
+          <button
+            onClick={() => setShowTeamsPanel(!showTeamsPanel)}
+            className="w-full flex items-center justify-between bg-white rounded-lg px-4 py-3 shadow-sm"
+          >
+            <span className="font-semibold text-gray-700">
+              Teams ({draftState.teams.length})
+            </span>
+            <div className="flex items-center gap-2">
+              {currentTeam && (
+                <span className="text-xs text-pokemon-blue font-medium">
+                  {currentTeam.display_name}'s turn
+                </span>
+              )}
+              <svg
+                className={`w-5 h-5 transition-transform ${showTeamsPanel ? 'rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </button>
+
+          {showTeamsPanel && (
+            <div className="mt-2 space-y-2">
+              {draftState.teams.map((team) => {
+                const isCurrentTurn = currentTeam?.team_id === team.team_id
+                const isMyTeam = myTeamId === team.team_id
+                return (
+                  <div
+                    key={team.team_id}
+                    className={`card p-3 ${isCurrentTurn ? 'ring-2 ring-pokemon-blue' : ''} ${isMyTeam ? 'bg-blue-50' : ''}`}
+                  >
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="font-medium text-sm truncate">
+                        {team.display_name}
+                        {isMyTeam && <span className="text-xs text-pokemon-blue ml-1">(You)</span>}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {team.pokemon.length}/{draftState.roster_size}
+                      </span>
+                    </div>
+                    {draftState.budget_enabled && (
+                      <div className="text-sm text-gray-500">
+                        Budget: {team.budget_remaining}
+                      </div>
+                    )}
+                    <div className="mt-2 flex flex-wrap gap-0.5">
+                      {team.pokemon.map((pokemonId) => {
+                        const pokemon = draftState.picks.find(p => p.pokemon_id === pokemonId)
+                        return (
+                          <img
+                            key={pokemonId}
+                            src={getSpriteUrl(pokemonId)}
+                            alt={pokemon?.pokemon_name || `#${pokemonId}`}
+                            title={pokemon?.pokemon_name || `#${pokemonId}`}
+                            className="w-8 h-8"
+                          />
+                        )
+                      })}
+                    </div>
+                    {draftState.status === 'completed' && (
+                      <button
+                        onClick={() => handleExport(team.team_id)}
+                        className="btn btn-secondary text-xs w-full mt-2"
+                      >
+                        Export Team
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
 
-        {/* Pokemon Selection */}
-        <div className="col-span-8">
+        {/* Desktop: 12-column grid layout */}
+        <div className="hidden lg:grid grid-cols-12 gap-4">
+          {/* Teams Panel - Desktop */}
+          <div className="col-span-2 space-y-3">
+            <h2 className="font-semibold text-gray-700">Teams</h2>
+            {draftState.teams.map((team) => {
+              const isCurrentTurn = currentTeam?.team_id === team.team_id
+              const isMyTeam = myTeamId === team.team_id
+              return (
+                <div
+                  key={team.team_id}
+                  className={`card p-3 ${isCurrentTurn ? 'ring-2 ring-pokemon-blue' : ''} ${isMyTeam ? 'bg-blue-50' : ''}`}
+                >
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-medium text-sm truncate">
+                      {team.display_name}
+                      {isMyTeam && <span className="text-xs text-pokemon-blue ml-1">(You)</span>}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {team.pokemon.length}/{draftState.roster_size}
+                    </span>
+                  </div>
+                  {draftState.budget_enabled && (
+                    <div className="text-sm text-gray-500">
+                      Budget: {team.budget_remaining}
+                    </div>
+                  )}
+                  <div className="mt-2 flex flex-wrap gap-0.5">
+                    {team.pokemon.map((pokemonId) => {
+                      const pokemon = draftState.picks.find(p => p.pokemon_id === pokemonId)
+                      return (
+                        <img
+                          key={pokemonId}
+                          src={getSpriteUrl(pokemonId)}
+                          alt={pokemon?.pokemon_name || `#${pokemonId}`}
+                          title={pokemon?.pokemon_name || `#${pokemonId}`}
+                          className="w-8 h-8"
+                        />
+                      )
+                    })}
+                  </div>
+                  {draftState.status === 'completed' && (
+                    <button
+                      onClick={() => handleExport(team.team_id)}
+                      className="btn btn-secondary text-xs w-full mt-2"
+                    >
+                      Export Team
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Pokemon Selection - Desktop */}
+          <div className="col-span-8">
           <div className="card">
             {/* Basic filters row */}
             <div className="flex gap-2 mb-2">
@@ -736,6 +864,170 @@ export default function DraftRoom() {
                     <span className="font-medium">{pick.team_name}</span>
                     <div className="capitalize text-xs text-gray-600">{pick.pokemon_name}</div>
                   </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        </div>
+
+        {/* Mobile: Pokemon Selection */}
+        <div className="lg:hidden">
+          <div className="card">
+            {/* Mobile search and filters */}
+            <div className="flex flex-col gap-2 mb-3">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search Pokémon..."
+                className="input w-full"
+              />
+              <div className="flex gap-2">
+                <select
+                  value={typeFilter || ''}
+                  onChange={(e) => setTypeFilter(e.target.value || null)}
+                  className="input flex-1 text-sm"
+                >
+                  <option value="">All Types</option>
+                  <option value="normal">Normal</option>
+                  <option value="fire">Fire</option>
+                  <option value="water">Water</option>
+                  <option value="electric">Electric</option>
+                  <option value="grass">Grass</option>
+                  <option value="ice">Ice</option>
+                  <option value="fighting">Fighting</option>
+                  <option value="poison">Poison</option>
+                  <option value="ground">Ground</option>
+                  <option value="flying">Flying</option>
+                  <option value="psychic">Psychic</option>
+                  <option value="bug">Bug</option>
+                  <option value="rock">Rock</option>
+                  <option value="ghost">Ghost</option>
+                  <option value="dragon">Dragon</option>
+                  <option value="dark">Dark</option>
+                  <option value="steel">Steel</option>
+                  <option value="fairy">Fairy</option>
+                </select>
+                <button
+                  onClick={() => setShowFilters(!showFilters)}
+                  className={`btn ${showFilters ? 'btn-primary' : 'btn-secondary'} text-sm px-3`}
+                >
+                  {showFilters ? 'Less' : 'More'}
+                </button>
+              </div>
+            </div>
+
+            {/* Mobile advanced filters */}
+            {showFilters && (
+              <div className="bg-gray-50 rounded-lg p-3 mb-3 space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    value={generationFilter ?? ''}
+                    onChange={(e) => setGenerationFilter(e.target.value ? Number(e.target.value) : null)}
+                    className="input text-sm"
+                  >
+                    <option value="">All Gens</option>
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((g) => (
+                      <option key={g} value={g}>Gen {g}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={legendaryFilter}
+                    onChange={(e) => setLegendaryFilter(e.target.value as 'all' | 'legendary' | 'mythical' | 'regular')}
+                    className="input text-sm"
+                  >
+                    <option value="all">All</option>
+                    <option value="legendary">Legendary</option>
+                    <option value="mythical">Mythical</option>
+                    <option value="regular">Regular</option>
+                  </select>
+                </div>
+                <div className="flex gap-2 items-center">
+                  <span className="text-xs text-gray-500 whitespace-nowrap">BST:</span>
+                  <input
+                    type="number"
+                    value={bstMin ?? ''}
+                    onChange={(e) => setBstMin(e.target.value ? Number(e.target.value) : null)}
+                    placeholder="Min"
+                    className="input flex-1 text-sm"
+                  />
+                  <span className="text-gray-400">-</span>
+                  <input
+                    type="number"
+                    value={bstMax ?? ''}
+                    onChange={(e) => setBstMax(e.target.value ? Number(e.target.value) : null)}
+                    placeholder="Max"
+                    className="input flex-1 text-sm"
+                  />
+                </div>
+                <button
+                  onClick={clearFilters}
+                  className="btn btn-ghost text-sm w-full"
+                >
+                  Clear Filters
+                </button>
+                <div className="text-xs text-gray-500 text-center">
+                  {filteredPokemon.length} Pokémon shown
+                </div>
+              </div>
+            )}
+
+            {/* Mobile Pokemon grid - 3 columns for better touch targets */}
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-1 max-h-[60vh] overflow-y-auto">
+              {filteredPokemon.map((pokemon) => {
+                const bst = getBaseStatTotal(pokemon)
+                return (
+                  <div
+                    key={pokemon.id}
+                    onClick={() => setSelectedPokemon(pokemon)}
+                    className={`pokemon-card p-1.5 text-center relative ${
+                      selectedPokemon?.id === pokemon.id ? 'border-pokemon-blue bg-blue-50 ring-2 ring-pokemon-blue' : ''
+                    }`}
+                  >
+                    {(pokemon.is_legendary || pokemon.is_mythical) && (
+                      <span className="absolute top-0.5 right-0.5 text-yellow-500 text-[10px]">★</span>
+                    )}
+                    <img
+                      src={getSpriteUrl(pokemon.id)}
+                      alt={pokemon.name}
+                      className="w-14 h-14 sm:w-16 sm:h-16 mx-auto"
+                    />
+                    <div className="text-xs font-medium capitalize truncate">{pokemon.name}</div>
+                    <div className="flex justify-center gap-0.5 mt-0.5 flex-wrap">
+                      {pokemon.types.map((type) => (
+                        <span
+                          key={type}
+                          className="px-1 py-0.5 rounded text-white text-[8px] font-bold uppercase"
+                          style={{ backgroundColor: TYPE_COLORS[type] || '#888' }}
+                        >
+                          {type.slice(0, 3)}
+                        </span>
+                      ))}
+                    </div>
+                    {bst && (
+                      <div className="text-[9px] text-gray-500 mt-0.5">
+                        {bst}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Mobile Recent Picks */}
+          <div className="card mt-4">
+            <h2 className="font-semibold text-gray-700 mb-2 text-sm">Recent Picks</h2>
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {draftState.picks.slice(-6).reverse().map((pick) => (
+                <div key={pick.pick_number} className="flex-shrink-0 text-center">
+                  <img
+                    src={getSpriteUrl(pick.pokemon_id)}
+                    alt={pick.pokemon_name}
+                    className="w-10 h-10 mx-auto"
+                  />
+                  <div className="text-[10px] text-gray-600 truncate max-w-[60px]">{pick.team_name}</div>
                 </div>
               ))}
             </div>
