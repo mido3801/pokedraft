@@ -12,7 +12,6 @@ import {
   DEFAULT_POKEMON_FILTERS,
 } from '../types'
 import { parsePoolCsv, generatePoolCsv, downloadFile } from '../utils/csvUtils'
-import { TEMPLATE_PRESETS, applyTemplate, getTemplateOptions } from '../data/templatePresets'
 import PokemonBox from './PokemonBox'
 import PokemonFiltersComponent from './PokemonFilters'
 import { Globe, Lock, X, Upload, Download } from 'lucide-react'
@@ -51,9 +50,8 @@ export default function PoolPresetModal({
   const [isPublic, setIsPublic] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Filters and template
+  // Filters
   const [filters, setFilters] = useState<PokemonFilters>(DEFAULT_POKEMON_FILTERS)
-  const [template, setTemplate] = useState('')
 
   // File upload state
   const [poolSource, setPoolSource] = useState<'filters' | 'file'>('filters')
@@ -97,14 +95,12 @@ export default function PoolPresetModal({
           })
           setPoolSource('filters')
         }
-        setTemplate('')
       } else {
         // Create mode - reset to defaults
         setName('')
         setDescription('')
         setIsPublic(false)
         setFilters(DEFAULT_POKEMON_FILTERS)
-        setTemplate('')
         setPoolSource('filters')
         setLoadedPoolIds([])
       }
@@ -143,7 +139,6 @@ export default function PoolPresetModal({
     setDescription('')
     setIsPublic(false)
     setFilters(DEFAULT_POKEMON_FILTERS)
-    setTemplate('')
     setPoolSource('filters')
     setLoadedPoolIds([])
     setError(null)
@@ -151,12 +146,6 @@ export default function PoolPresetModal({
     setUploadWarnings([])
     setUploadSuccess(null)
     onClose()
-  }
-
-  // Handle template change
-  const handleTemplateChange = (templateId: string) => {
-    setTemplate(templateId)
-    setFilters(applyTemplate(templateId))
   }
 
   // Toggle custom exclusion/inclusion
@@ -329,7 +318,6 @@ export default function PoolPresetModal({
     : pokemon.filter(p => pokemonPassesFilters(p, filters)).length
 
   const isPending = createMutation.isPending || updateMutation.isPending
-  const templateOptions = getTemplateOptions()
 
   if (!isOpen) return null
 
@@ -510,28 +498,6 @@ export default function PoolPresetModal({
           {/* Filters Section - only show when using filters */}
           {poolSource === 'filters' && (
             <>
-              {/* Template Selection */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Template</label>
-                <select
-                  value={template}
-                  onChange={(e) => handleTemplateChange(e.target.value)}
-                  className="input"
-                  disabled={pokemonLoading}
-                >
-                  {templateOptions.map(opt => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-                {template && TEMPLATE_PRESETS[template] && (
-                  <p className="text-sm text-gray-500 mt-1">
-                    {TEMPLATE_PRESETS[template].description}
-                  </p>
-                )}
-              </div>
-
               {/* Pokemon Filters */}
               <PokemonFiltersComponent
                 filters={filters}

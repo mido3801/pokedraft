@@ -9,7 +9,6 @@ export interface CreateDraftParams {
   roster_size: number
   pokemon_pool?: unknown[]
   pokemon_filters?: PokemonFilters
-  template_id?: string
   // Auction-specific settings
   nomination_timer_seconds?: number
   min_bid?: number

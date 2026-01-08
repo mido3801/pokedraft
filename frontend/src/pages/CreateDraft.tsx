@@ -13,7 +13,6 @@ import PointsManager from '../components/PointsManager'
 import PoolFileLoader from '../components/PoolFileLoader'
 import SavePresetModal from '../components/SavePresetModal'
 import LoadPresetModal from '../components/LoadPresetModal'
-import { TEMPLATE_PRESETS, applyTemplate, getTemplateOptions } from '../data/templatePresets'
 import { Save, FolderOpen } from 'lucide-react'
 
 // Helper to check if a Pokemon passes filters
@@ -42,7 +41,6 @@ export default function CreateDraft() {
     timerSeconds: 90,
     budgetEnabled: false,
     budgetPerTeam: 100,
-    template: '',
     // Auction-specific settings
     nominationTimerSeconds: 30,
     minBid: 1,
@@ -75,23 +73,6 @@ export default function CreateDraft() {
       setError('Failed to load Pokémon data')
     }
   }, [pokemonError])
-
-  // Handle template change - apply preset filters and settings
-  const handleTemplateChange = (templateId: string) => {
-    setFormData(prev => {
-      const template = TEMPLATE_PRESETS[templateId]
-      return {
-        ...prev,
-        template: templateId,
-        // Apply template settings if defined
-        ...(template?.rosterSize && { rosterSize: template.rosterSize }),
-        ...(template?.budgetEnabled !== undefined && { budgetEnabled: template.budgetEnabled }),
-        ...(template?.budgetPerTeam && { budgetPerTeam: template.budgetPerTeam }),
-      }
-    })
-    // Apply template filters
-    setFilters(applyTemplate(templateId))
-  }
 
   // Calculate stats for budget mode validation (NOT for auction - auction doesn't use point values)
   const budgetStats = useMemo(() => {
@@ -169,8 +150,6 @@ export default function CreateDraft() {
     // Expand the pool section so user can see the loaded preset
     setShowPokemonPool(true)
 
-    // Clear the template since we're using a custom preset
-    setFormData(prev => ({ ...prev, template: '' }))
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -254,7 +233,6 @@ export default function CreateDraft() {
         // Don't use filters when: point cap mode OR file-loaded pool
         pokemon_filters: (isAuction || (!formData.budgetEnabled && poolSource === 'filters')) ? filters : undefined,
         pokemon_pool: pokemon_pool,
-        template_id: formData.template || undefined,
         // Auction-specific settings
         nomination_timer_seconds: isAuction ? formData.nominationTimerSeconds : undefined,
         min_bid: isAuction ? formData.minBid : undefined,
@@ -364,7 +342,6 @@ export default function CreateDraft() {
     )
   }
 
-  const templateOptions = getTemplateOptions()
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -630,30 +607,6 @@ export default function CreateDraft() {
                 onPoolLoad={setLoadedPoolIds}
                 onClear={() => setLoadedPoolIds([])}
               />
-            </div>
-          )}
-
-          {/* Template Selection - only shown when using filters */}
-          {(formData.format === 'auction' || formData.budgetEnabled || poolSource === 'filters') && (
-            <div className="mb-4">
-              <label className="label">Template</label>
-              <select
-                value={formData.template}
-                onChange={(e) => handleTemplateChange(e.target.value)}
-                className="input"
-                disabled={isLoading}
-              >
-                {templateOptions.map(opt => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-              {formData.template && TEMPLATE_PRESETS[formData.template] && (
-                <p className="text-sm text-gray-500 mt-1">
-                  {TEMPLATE_PRESETS[formData.template].description}
-                </p>
-              )}
             </div>
           )}
 

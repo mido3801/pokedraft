@@ -97,7 +97,7 @@ export default function Dashboard() {
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-gradient-to-br from-pokemon-red to-red-600 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+            <div className="w-16 h-16 bg-gradient-to-br from-slate-700 to-slate-900 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg">
               {user?.display_name?.charAt(0).toUpperCase() || 'T'}
             </div>
             <div>
@@ -113,46 +113,53 @@ export default function Dashboard() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-2 gap-6">
           {/* Quick Actions */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-pokemon-blue/10 rounded-xl flex items-center justify-center">
-                <Zap className="w-5 h-5 text-pokemon-blue" />
+              <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+                <Zap className="w-5 h-5 text-indigo-600" />
               </div>
               <h2 className="text-xl font-bold text-gray-900">Quick Actions</h2>
             </div>
-            <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-4">
               <Link
                 to="/draft/create"
-                className="group flex items-center justify-between w-full px-4 py-3 rounded-xl bg-gradient-to-r from-pokemon-red to-red-600 text-white font-medium hover:shadow-lg hover:scale-[1.02] transition-all"
+                className="group col-span-2 relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 p-5 text-white hover:shadow-xl hover:scale-[1.02] transition-all"
               >
-                <span className="flex items-center gap-2">
-                  <Play className="w-4 h-4" />
-                  Start a Quick Draft
-                </span>
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-full -translate-y-1/2 translate-x-1/2" />
+                <div className="absolute bottom-0 left-0 w-20 h-20 bg-gradient-to-tr from-teal-500/10 to-cyan-500/10 rounded-full translate-y-1/2 -translate-x-1/2" />
+                <div className="relative">
+                  <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center mb-3 shadow-lg shadow-indigo-500/25">
+                    <Play className="w-6 h-6" />
+                  </div>
+                  <h3 className="font-bold text-lg mb-1">Start a Quick Draft</h3>
+                  <p className="text-slate-400 text-sm">Jump right in with friends</p>
+                </div>
+                <ArrowRight className="absolute bottom-5 right-5 w-5 h-5 text-slate-500 group-hover:text-white group-hover:translate-x-1 transition-all" />
               </Link>
               <Link
                 to="/leagues"
                 state={{ openCreate: true }}
-                className="group flex items-center justify-between w-full px-4 py-3 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium transition-colors"
+                className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200/50 p-5 text-slate-800 hover:shadow-xl hover:scale-[1.02] transition-all"
               >
-                <span className="flex items-center gap-2">
-                  <Plus className="w-4 h-4 text-pokemon-yellow" />
-                  Create a League
-                </span>
-                <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-amber-200/40 to-orange-200/40 rounded-full -translate-y-1/2 translate-x-1/2" />
+                <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl flex items-center justify-center mb-3 shadow-md shadow-amber-500/20">
+                  <Trophy className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="font-bold mb-1">Create League</h3>
+                <p className="text-slate-500 text-xs">Compete with friends</p>
               </Link>
               <Link
                 to="/draft/join"
-                className="group flex items-center justify-between w-full px-4 py-3 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium transition-colors"
+                className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200/50 p-5 text-slate-800 hover:shadow-xl hover:scale-[1.02] transition-all"
               >
-                <span className="flex items-center gap-2">
-                  <Users className="w-4 h-4 text-pokemon-blue" />
-                  Join a Draft
-                </span>
-                <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+                <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-slate-200/50 to-slate-300/50 rounded-full -translate-y-1/2 translate-x-1/2" />
+                <div className="w-10 h-10 bg-gradient-to-br from-slate-600 to-slate-700 rounded-xl flex items-center justify-center mb-3 shadow-md shadow-slate-500/20">
+                  <Users className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="font-bold mb-1">Join Draft</h3>
+                <p className="text-slate-500 text-xs">Enter a room code</p>
               </Link>
             </div>
           </div>
@@ -160,8 +167,8 @@ export default function Dashboard() {
           {/* Active Drafts */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-type-electric/20 rounded-xl flex items-center justify-center">
-                <Clock className="w-5 h-5 text-type-electric" />
+              <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
+                <Clock className="w-5 h-5 text-emerald-600" />
               </div>
               <h2 className="text-xl font-bold text-gray-900">Active Drafts</h2>
             </div>
@@ -175,7 +182,7 @@ export default function Dashboard() {
                   <Link
                     key={draft.id}
                     to={`/d/${draft.id}`}
-                    className="group flex items-center justify-between p-3 rounded-xl border border-gray-200 hover:border-pokemon-red/30 hover:shadow-sm transition-all"
+                    className="group flex items-center justify-between p-3 rounded-xl border border-gray-200 hover:border-indigo-200 hover:shadow-sm transition-all"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
@@ -215,7 +222,7 @@ export default function Dashboard() {
                           )}
                         </button>
                       )}
-                      <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-pokemon-red transition-colors" />
+                      <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-indigo-600 transition-colors" />
                     </div>
                   </Link>
                 ))}
@@ -230,7 +237,7 @@ export default function Dashboard() {
                 </p>
                 <Link
                   to="/draft/create"
-                  className="inline-flex items-center gap-2 text-pokemon-red font-medium hover:underline"
+                  className="inline-flex items-center gap-2 text-indigo-600 font-medium hover:underline"
                 >
                   <Plus className="w-4 h-4" />
                   Start one now
@@ -242,8 +249,8 @@ export default function Dashboard() {
           {/* Recent Drafts */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-type-psychic/20 rounded-xl flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-type-psychic" />
+              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">
+                <Sparkles className="w-5 h-5 text-slate-600" />
               </div>
               <h2 className="text-xl font-bold text-gray-900">Recent Drafts</h2>
             </div>
@@ -304,17 +311,17 @@ export default function Dashboard() {
           <PoolPresetsCard />
 
           {/* My Leagues - Full Width */}
-          <div className="md:col-span-2 lg:col-span-3 bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
+          <div className="md:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-pokemon-yellow/20 rounded-xl flex items-center justify-center">
-                  <Trophy className="w-5 h-5 text-pokemon-yellow" />
+                <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
+                  <Trophy className="w-5 h-5 text-amber-600" />
                 </div>
                 <h2 className="text-xl font-bold text-gray-900">My Leagues</h2>
               </div>
               <Link
                 to="/leagues"
-                className="flex items-center gap-1 text-pokemon-red font-medium hover:underline"
+                className="flex items-center gap-1 text-indigo-600 font-medium hover:underline"
               >
                 View all
                 <ArrowRight className="w-4 h-4" />
@@ -331,9 +338,9 @@ export default function Dashboard() {
                   <Link
                     key={league.id}
                     to={`/leagues/${league.id}`}
-                    className="group p-4 rounded-xl border border-gray-200 hover:border-pokemon-red/30 hover:shadow-md transition-all"
+                    className="group p-4 rounded-xl border border-gray-200 hover:border-indigo-200 hover:shadow-md transition-all"
                   >
-                    <h3 className="font-semibold text-gray-900 group-hover:text-pokemon-red transition-colors mb-2">
+                    <h3 className="font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors mb-2">
                       {league.name}
                     </h3>
                     {league.description && (
@@ -373,7 +380,7 @@ export default function Dashboard() {
                 </p>
                 <Link
                   to="/leagues"
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-pokemon-red text-white rounded-xl font-medium hover:bg-red-600 shadow-sm hover:shadow-md transition-all"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl font-medium hover:from-indigo-700 hover:to-indigo-800 shadow-sm hover:shadow-md transition-all"
                 >
                   <Plus className="w-4 h-4" />
                   Create a League

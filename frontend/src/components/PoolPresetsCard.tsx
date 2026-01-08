@@ -112,14 +112,14 @@ export default function PoolPresetsCard() {
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-            <Database className="w-5 h-5 text-purple-600" />
+          <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+            <Database className="w-5 h-5 text-indigo-600" />
           </div>
           <h2 className="text-xl font-bold text-gray-900">Pool Presets</h2>
         </div>
         <button
           onClick={handleCreateNew}
-          className="flex items-center gap-1 text-sm text-purple-600 hover:underline"
+          className="flex items-center gap-1 text-sm text-indigo-600 hover:underline"
         >
           <Plus className="w-4 h-4" />
           Add Pool
@@ -154,7 +154,7 @@ export default function PoolPresetsCard() {
                 <button
                   onClick={(e) => handleEdit(preset.id, e)}
                   disabled={loadingPresetId === preset.id}
-                  className="p-1.5 rounded text-gray-400 hover:text-purple-500 hover:bg-purple-50 transition-colors disabled:opacity-50"
+                  className="p-1.5 rounded text-gray-400 hover:text-indigo-500 hover:bg-indigo-50 transition-colors disabled:opacity-50"
                   title="Edit preset"
                 >
                   {loadingPresetId === preset.id ? (
@@ -206,7 +206,7 @@ export default function PoolPresetsCard() {
           </p>
           <button
             onClick={handleCreateNew}
-            className="inline-flex items-center gap-2 text-purple-600 font-medium hover:underline"
+            className="inline-flex items-center gap-2 text-indigo-600 font-medium hover:underline"
           >
             <Plus className="w-4 h-4" />
             Create your first pool
